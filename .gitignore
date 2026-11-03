@@ -1,8 +1,16 @@
+# =============================================================================
+# OrbitOS — Autonomous Space Mission Management Simulator
+# .gitignore — Comprehensive exclusion rules
+# =============================================================================
+
+# -----------------------------------------------------------------------------
 # Python
+# -----------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+*.pyd
 .Python
 build/
 develop-eggs/
@@ -19,17 +27,46 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-.nox/
-.hypothesis/
+MANIFEST
+
+# Virtual environments
 .venv/
 venv/
 ENV/
+env/
+.env.venv/
 
-# Node / React
+# Testing & coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+nosetests.xml
+.tox/
+.nox/
+.hypothesis/
+
+# Type checking & linting
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.pyright/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Distribution
+dist/
+*.whl
+*.tar.gz
+
+# -----------------------------------------------------------------------------
+# Node / Frontend (React + Vite)
+# -----------------------------------------------------------------------------
 node_modules/
 npm-debug.log*
 yarn-debug.log*
@@ -37,26 +74,152 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 .pnpm-debug.log*
+.yarn/
+.pnp.*
+
+# Vite build output
 frontend/dist/
 frontend/dist-ssr/
+frontend/.vite/
 *.local
 
-# Environment variables
+# TypeScript build info
+*.tsbuildinfo
+frontend/tsconfig.tsbuildinfo
+
+# -----------------------------------------------------------------------------
+# Environment variables (NEVER commit secrets)
+# -----------------------------------------------------------------------------
+.env
 .env.local
 .env.*.local
-# Preserve .env if user has credentials, but do not track personal secrets in git
+.env.production
+.env.staging
+# Keep: .env.example (safe template, no real secrets)
 
-# Databases & Docker
-postgres_data/
+# -----------------------------------------------------------------------------
+# Databases & Persistent Storage
+# -----------------------------------------------------------------------------
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
-*.db
+orbitos.db
+postgres_data/
+pgdata/
 
-# IDEs
-.idea/
+# -----------------------------------------------------------------------------
+# Logs
+# -----------------------------------------------------------------------------
+*.log
+*.log.*
+logs/
+log/
+*.out
+
+# -----------------------------------------------------------------------------
+# Docker
+# -----------------------------------------------------------------------------
+# Keep docker-compose.yml but exclude local overrides
+docker-compose.override.yml
+docker-compose.local.yml
+.docker/
+
+# -----------------------------------------------------------------------------
+# IDE / Editor
+# -----------------------------------------------------------------------------
 .vscode/
+.idea/
 *.swp
 *.swo
 *~
-.DS_Store
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
 
+# -----------------------------------------------------------------------------
+# OS-generated files
+# -----------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# -----------------------------------------------------------------------------
+# Formal Specification tooling (VDM, Alloy, TLA+)
+# -----------------------------------------------------------------------------
+formal-specifications/*.vdmj
+formal-specifications/output/
+formal-specifications/*.als.bak
+*.toolbox/
+*.cfg.bak
+
+# -----------------------------------------------------------------------------
+# ML model artifacts (large binaries — store with DVC or LFS if needed)
+# -----------------------------------------------------------------------------
+backend/app/ml/models/*.pkl
+backend/app/ml/models/*.joblib
+backend/app/ml/models/*.h5
+backend/app/ml/models/*.pt
+backend/app/ml/models/*.onnx
+ml_runs/
+mlruns/
+
+# -----------------------------------------------------------------------------
+# Security — never commit these
+# -----------------------------------------------------------------------------
+*.pem
+*.key
+*.cert
+*.crt
+*.p12
+*.pfx
+secrets/
+credentials/
+
+# -----------------------------------------------------------------------------
+# Temporary / scratch files
+# -----------------------------------------------------------------------------
+tmp/
+temp/
+scratch/
+*.bak
+*.tmp
+*.orig
+*.rej
+*.patch
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+build/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
