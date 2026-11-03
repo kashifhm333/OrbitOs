@@ -1,0 +1,135 @@
+module OrbitOS_SafetyCore
+exports all
+definitions
+
+types
+
+  String = seq of char;
+  UUID = String;
+
+  Real = real;
+  Meters = real;
+  MetersPerSecond = real;
+  Kilograms = real
+  inv m == m >= 0.0;
+
+  BatteryPercentage = real
+  inv soc == soc >= 0.0 and soc <= 100.0;
+
+  OperationalState = <CREATION> | <STANDBY> | <ACTIVE> | <MANEUVERING> | <DEGRADED> | <SAFE_HOLD> | <DECOMMISSIONED>;
+
+  TaskState = <SUBMITTED> | <SCHEDULED> | <EXECUTING> | <SUCCEEDED> | <FAILED> | <CANCELLED>;
+
+  Vector3D ::
+    x : Real
+    y : Real
+    z : Real;
+
+  StateVector ::
+    position : Vector3D
+    velocity : Vector3D;
+
+  Satellite ::
+    id : UUID
+    dry_mass : Kilograms
+    propellant_mass : Kilograms
+    battery_soc : BatteryPercentage
+    operational_state : OperationalState
+    state_vector : StateVector
+  inv sat == 
+    sat.dry_mass > 0.0 and
+    sat.propellant_mass >= 0.0 and
+    sat.battery_soc >= 0.0 and sat.battery_soc <= 100.0 and
+    (sat.operational_state = <MANEUVERING> => sat.battery_soc >= 25.0);
+
+  ManeuverPlan ::
+    plan_id : UUID
+    satellite_id : UUID
+    delta_v : Vector3D
+    scheduled_epoch : real
+    required_propellant : Kilograms
+    is_approved : bool;
+
+  MissionTask ::
+    task_id : UUID
+    satellite_id : UUID
+    priority : nat1
+    duration : real
+    energy_cost_wh : real
+    earliest_start : real
+    deadline : real
+    state : TaskState
+  inv task == 
+    task.priority <= 5 and 
+    task.duration > 0.0 and 
+    task.deadline >= task.earliest_start + task.duration;
+
+state OrbitOS_System of
+  satellites : map UUID to Satellite
+  active_maneuvers : map UUID to ManeuverPlan
+  mission_tasks : map UUID to MissionTask
+  simulation_epoch : real
+inv mk_OrbitOS_System(sats, mans, tasks, epoch) ==
+  epoch >= 0.0 and
+  (forall m in set rng mans & m.satellite_id in set dom sats) and
+  (forall t in set rng tasks & t.satellite_id in set dom sats)
+init s == s = mk_OrbitOS_System({|->}, {|->}, {|->}, 0.0)
+end
+
+operations
+
+  ExecuteManeuverBurn: UUID ==> ()
+  ExecuteManeuverBurn(plan_id) ==
+    let plan = active_maneuvers(plan_id),
+        sat = satellites(plan.satellite_id),
+        new_fuel = sat.propellant_mass - plan.required_propellant,
+        new_vel = mk_Vector3D(
+          sat.state_vector.velocity.x + plan.delta_v.x,
+          sat.state_vector.velocity.y + plan.delta_v.y,
+          sat.state_vector.velocity.z + plan.delta_v.z
+        ),
+        new_state_vec = mk_StateVector(sat.state_vector.position, new_vel),
+        updated_sat = mu(sat, 
+          propellant_mass |-> new_fuel,
+          state_vector |-> new_state_vec,
+          operational_state |-> <ACTIVE>
+        )
+    in
+      (
+        satellites := satellites ++ {sat.id |-> updated_sat};
+        active_maneuvers := {plan_id} <-: active_maneuvers
+      )
+  pre
+    plan_id in set dom active_maneuvers and
+    let p = active_maneuvers(plan_id), s = satellites(p.satellite_id) in
+      p.is_approved = true and
+      s.operational_state = <MANEUVERING> and
+      s.propellant_mass >= p.required_propellant and
+      s.battery_soc >= 25.0
+  post
+    let sat_post = satellites(active_maneuvers~(plan_id).satellite_id) in
+      sat_post.propellant_mass < satellites~(sat_post.id).propellant_mass and
+      sat_post.propellant_mass >= 0.0 and
+      sat_post.operational_state = <ACTIVE>;
+
+  UpdateBatteryCharge: UUID * real * real ==> ()
+  UpdateBatteryCharge(sat_id, delta_energy_joules, battery_capacity_joules) ==
+    let sat = satellites(sat_id),
+        delta_pct = (delta_energy_joules / battery_capacity_joules) * 100.0,
+        raw_soc = sat.battery_soc + delta_pct,
+        clamped_soc = if raw_soc > 100.0 then 100.0 else (if raw_soc < 0.0 then 0.0 else raw_soc),
+        new_mode = if clamped_soc < 15.0 then <SAFE_HOLD> else sat.operational_state,
+        updated_sat = mu(sat, battery_soc |-> clamped_soc, operational_state |-> new_mode)
+    in
+      satellites := satellites ++ {sat_id |-> updated_sat}
+  pre
+    sat_id in set dom satellites and
+    battery_capacity_joules > 0.0
+  post
+    let sat_post = satellites(sat_id) in
+      sat_post.battery_soc >= 0.0 and
+      sat_post.battery_soc <= 100.0 and
+      (sat_post.battery_soc < 15.0 => sat_post.operational_state = <SAFE_HOLD>);
+
+end OrbitOS_SafetyCore
+

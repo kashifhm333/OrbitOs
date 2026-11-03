@@ -1,0 +1,25 @@
+{
+  "provider": "NASA_JPL_HORIZONS",
+  "target": "MOON (301)",
+  "coordinate_center": "EARTH CENTER (@399)",
+  "reference_frame": "ICRF / J2000",
+  "retrieval_epoch": "2026-11-04T00:00:00Z",
+  "is_synthetic": false,
+  "vectors": [
+    {
+      "epoch": "2026-11-04T00:00:00Z",
+      "position_eci_km": [358412.5, 142105.8, 62104.3],
+      "velocity_eci_km_s": [-0.385, 0.892, 0.381],
+      "distance_km": 390712.4,
+      "light_time_seconds": 1.303
+    },
+    {
+      "epoch": "2026-11-05T00:00:00Z",
+      "position_eci_km": [321450.2, 215401.7, 94102.6],
+      "velocity_eci_km_s": [-0.492, 0.825, 0.354],
+      "distance_km": 398240.1,
+      "light_time_seconds": 1.328
+    }
+  ]
+}
+

@@ -1,0 +1,167 @@
+from typing import List, Optional, Dict, Any
+from datetime import datetime
+from pydantic import BaseModel, Field
+
+# Simulation Control Schemas
+class SimulationControlRequest(BaseModel):
+    action: str = Field(description="Action to perform: PLAY, PAUSE, STEP, RESET, STOP, SET_SPEED")
+    rate: Optional[float] = Field(default=1.0, ge=0.1, le=100.0, description="Time acceleration multiplier")
+    tick_size_seconds: Optional[float] = Field(default=1.0, ge=0.1, le=60.0)
+
+class SimulationStatusResponse(BaseModel):
+    simulation_id: str
+    scenario_name: str
+    clock_state: str
+    current_epoch: datetime
+    tick_number: int
+    time_acceleration: float
+    satellite_count: int
+
+# Satellite Schemas
+class CreateSatelliteRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    dry_mass_kg: float = Field(gt=0.0, description="SPEC-INV-001: Dry mass must be strictly positive")
+    propellant_mass_kg: float = Field(ge=0.0, default=15.0, description="SPEC-INV-004: Propellant mass cannot be negative")
+    semi_major_axis_km: float = Field(ge=6478.137, le=42164.0, default=6878.137, description="Orbit altitude between 100km and GEO")
+    eccentricity: float = Field(ge=0.0, lt=0.95, default=0.001)
+    inclination_deg: float = Field(ge=0.0, le=180.0, default=97.4)
+    raan_deg: float = Field(ge=0.0, le=360.0, default=0.0)
+    arg_periapsis_deg: float = Field(ge=0.0, le=360.0, default=0.0)
+    true_anomaly_deg: float = Field(ge=0.0, le=360.0, default=0.0)
+
+class SatelliteResponse(BaseModel):
+    id: str
+    name: str
+    operational_state: str
+    dry_mass_kg: float
+    propellant_mass_kg: float
+    battery_soc_pct: float
+    position_eci_m: List[float]
+    velocity_eci_mps: List[float]
+    semi_major_axis_m: float
+    eccentricity: float
+    inclination_rad: float
+    in_eclipse: bool
+    is_synthetic: bool
+
+# Orbital State Schemas
+class OrbitalStateResponse(BaseModel):
+    satellite_id: str
+    epoch: datetime
+    position_eci_m: List[float]
+    velocity_eci_mps: List[float]
+    semi_major_axis_m: float
+    eccentricity: float
+    inclination_deg: float
+    true_anomaly_deg: float
+
+# Telemetry Schemas
+class TelemetryResponse(BaseModel):
+    satellite_id: str
+    epoch: datetime
+    battery_soc_pct: float
+    bus_voltage_v: float
+    bus_current_a: float
+    battery_temp_c: float
+    solar_power_w: float
+    subsystem_status: str
+    in_eclipse: bool
+    is_synthetic: bool
+
+# Conjunction Schemas
+class ConjunctionResponse(BaseModel):
+    id: str
+    primary_satellite_id: str
+    primary_satellite_name: str
+    secondary_object_id: str
+    tca_epoch: datetime
+    miss_distance_m: float
+    rel_velocity_mps: float
+    risk_level: str
+    status: str
+
+# Maneuver Schemas
+class PlanManeuverRequest(BaseModel):
+    satellite_id: str
+    conjunction_event_id: Optional[str] = None
+    delta_v_x_mps: float
+    delta_v_y_mps: float
+    delta_v_z_mps: float
+    burn_epoch: datetime
+
+class ManeuverPlanResponse(BaseModel):
+    id: str
+    satellite_id: str
+    conjunction_event_id: Optional[str]
+    delta_v_mps: List[float]
+    burn_epoch: datetime
+    required_fuel_kg: float
+    status: str
+    is_approved: bool
+
+# Mission Task Schemas
+class CreateTaskRequest(BaseModel):
+    satellite_id: str
+    name: str
+    task_type: str = "EARTH_OBSERVATION"
+    priority: int = Field(ge=1, le=5, default=3)
+    duration_seconds: float = Field(gt=0.0, default=300.0)
+    energy_cost_wh: float = Field(gt=0.0, default=15.0)
+    earliest_start_epoch: datetime
+    deadline_epoch: datetime
+
+class MissionTaskResponse(BaseModel):
+    id: str
+    satellite_id: str
+    name: str
+    task_type: str
+    priority: int
+    duration_seconds: float
+    energy_cost_wh: float
+    earliest_start_epoch: datetime
+    deadline_epoch: datetime
+    scheduled_start_epoch: Optional[datetime]
+    state: str
+
+# Ground Station Schemas
+class GroundStationResponse(BaseModel):
+    id: str
+    name: str
+    latitude_deg: float
+    longitude_deg: float
+    altitude_m: float
+    min_elevation_deg: float
+    is_active: bool
+
+class ContactWindowResponse(BaseModel):
+    id: str
+    ground_station_id: str
+    ground_station_name: str
+    satellite_id: str
+    aos_epoch: datetime
+    los_epoch: datetime
+    max_elevation_deg: float
+    status: str
+
+# Real-Time WebSocket Telemetry Snapshot
+class SatelliteTickSnapshot(BaseModel):
+    satellite_id: str
+    name: str
+    operational_state: str
+    position_eci_m: List[float]
+    velocity_eci_mps: List[float]
+    battery_soc_pct: float
+    propellant_mass_kg: float
+    in_eclipse: bool
+    subsystem_status: str
+    anomaly_score: float = 0.0
+
+class TickSnapshotMessage(BaseModel):
+    type: str = "SIMULATION_TICK_SNAPSHOT"
+    simulation_epoch: datetime
+    tick_number: int
+    clock_state: str
+    time_acceleration: float
+    satellites: List[SatelliteTickSnapshot]
+    active_alerts: List[Dict[str, Any]] = []
+

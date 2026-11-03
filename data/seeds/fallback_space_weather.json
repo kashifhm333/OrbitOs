@@ -1,0 +1,31 @@
+{
+  "provider": "NASA_DONKI",
+  "source": "NASA Space Weather Database Of Notifications, Knowledge, Information",
+  "timestamp": "2026-11-04T00:00:00Z",
+  "is_synthetic": false,
+  "solar_flares": [
+    {
+      "flrID": "2026-11-03T14:30:00-FLR-001",
+      "beginTime": "2026-11-03T14:15:00Z",
+      "peakTime": "2026-11-03T14:30:00Z",
+      "endTime": "2026-11-03T14:48:00Z",
+      "classType": "M2.4",
+      "sourceLocation": "N18E42",
+      "activeRegionNum": 13880,
+      "link_attenuation_db": 3.2,
+      "geomagnetic_k_index": 4.0
+    },
+    {
+      "flrID": "2026-11-02T08:12:00-FLR-002",
+      "beginTime": "2026-11-02T07:55:00Z",
+      "peakTime": "2026-11-02T08:12:00Z",
+      "endTime": "2026-11-02T08:35:00Z",
+      "classType": "C8.1",
+      "sourceLocation": "S12W15",
+      "activeRegionNum": 13878,
+      "link_attenuation_db": 1.1,
+      "geomagnetic_k_index": 2.5
+    }
+  ]
+}
+

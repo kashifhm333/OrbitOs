@@ -1,0 +1,54 @@
+{
+  "provider": "CELESTRAK",
+  "source": "CelesTrak General Perturbations (GP) Satellite Catalog",
+  "retrieval_epoch": "2026-11-04T00:00:00Z",
+  "is_synthetic": false,
+  "satellites": [
+    {
+      "name": "ISS (ZARYA)",
+      "norad_cat_id": 25544,
+      "intl_designator": "1998-067A",
+      "epoch": "2026-11-03T18:00:00Z",
+      "semi_major_axis_km": 6797.14,
+      "eccentricity": 0.000624,
+      "inclination_deg": 51.643,
+      "raan_deg": 124.512,
+      "arg_periapsis_deg": 78.432,
+      "mean_anomaly_deg": 281.714,
+      "mean_motion_rev_day": 15.4982,
+      "tle_line1": "1 25544U 98067A   26307.75000000  .00016717  00000-0  10270-3 0  9993",
+      "tle_line2": "2 25544  51.6430 124.5120 0006240  78.4320 281.7140 15.49820000452316"
+    },
+    {
+      "name": "TERRA",
+      "norad_cat_id": 25994,
+      "intl_designator": "1999-068A",
+      "epoch": "2026-11-03T18:00:00Z",
+      "semi_major_axis_km": 7083.52,
+      "eccentricity": 0.001180,
+      "inclination_deg": 98.204,
+      "raan_deg": 312.451,
+      "arg_periapsis_deg": 65.120,
+      "mean_anomaly_deg": 295.102,
+      "mean_motion_rev_day": 14.5711,
+      "tle_line1": "1 25994U 99068A   26307.75000000  .00000214  00000-0  34120-4 0  9997",
+      "tle_line2": "2 25994  98.2040 312.4510 0011800  65.1200 295.1020 14.57110000241025"
+    },
+    {
+      "name": "NOAA 20",
+      "norad_cat_id": 43013,
+      "intl_designator": "2017-073A",
+      "epoch": "2026-11-03T18:00:00Z",
+      "semi_major_axis_km": 7202.84,
+      "eccentricity": 0.000142,
+      "inclination_deg": 98.715,
+      "raan_deg": 45.182,
+      "arg_periapsis_deg": 112.450,
+      "mean_anomaly_deg": 247.671,
+      "mean_motion_rev_day": 14.1952,
+      "tle_line1": "1 43013U 17073A   26307.75000000  .00000078  00000-0  21450-4 0  9991",
+      "tle_line2": "2 43013  98.7150  45.1820 0001420 112.4500 247.6710 14.19520000312018"
+    }
+  ]
+}
+

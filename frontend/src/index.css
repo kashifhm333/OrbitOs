@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #070b19;
+  color: #f1f5f9;
+  overflow: hidden;
+}
+
+/* Custom scrollbar for telemetry panels */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0c1329;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e2c59;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2b3f7f;
+}
+
