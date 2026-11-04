@@ -28,7 +28,7 @@ services:
     environment:
       - ENVIRONMENT=development
       - DATABASE_URL=postgresql+asyncpg://orbitos_user:orbitos_password@database:5432/orbitos_db
-      - NASA_API_KEY=${NASA_API_KEY:-mCB7BzpD6WCzrJgfJgngMMtgmBmFWhbHCdp8WkJg}
+      - NASA_API_KEY=${NASA_API_KEY:-DEMO_KEY}
     ports:
       - "8000:8000"
     depends_on:
@@ -39,8 +39,8 @@ services:
 
   frontend:
     build:
-      context: ./frontend
-      dockerfile: ../docker/Dockerfile.frontend
+      context: .
+      dockerfile: docker/Dockerfile.frontend
     container_name: orbitos_frontend
     restart: unless-stopped
     ports:

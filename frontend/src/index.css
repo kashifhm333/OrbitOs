@@ -33,3 +33,38 @@ body {
   background: #2b3f7f;
 }
 
+/* Glassmorphism card utility */
+.glass-card {
+  background: rgba(12, 19, 41, 0.80);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(30, 44, 89, 0.70);
+  border-radius: 12px;
+}
+
+/* Scan-line animation for active satellite */
+@keyframes scanline {
+  0% { opacity: 0.4; transform: translateY(-100%); }
+  100% { opacity: 0; transform: translateY(100%); }
+}
+.scanline { animation: scanline 3s linear infinite; }
+
+/* Pulsing glow for live indicator */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 4px 1px rgba(34, 211, 238, 0.4); }
+  50% { box-shadow: 0 0 10px 3px rgba(34, 211, 238, 0.7); }
+}
+.glow-cyan { animation: glow-pulse 2s ease-in-out infinite; }
+
+/* Number transition */
+.metric-value {
+  transition: color 0.3s ease;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Bottom strip slide animation */
+@keyframes slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.slide-up { animation: slide-up 0.25s ease-out; }

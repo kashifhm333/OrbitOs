@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { SatelliteTelemetry, ConjunctionAlert, TickSnapshotMessage } from '../types';
+import { SatelliteTelemetry, ConjunctionAlert, TickSnapshotMessage, SimulationEvent } from '../types';
 
 interface OrbitStore {
   simulationEpoch: string;
@@ -9,11 +9,19 @@ interface OrbitStore {
   satellites: Record<string, SatelliteTelemetry>;
   selectedSatelliteId: string | null;
   activeAlerts: ConjunctionAlert[];
+  recentEvents: SimulationEvent[];
+  debrisList: any[];
   isWsConnected: boolean;
+  showDebris: boolean;
+  showGroundStations: boolean;
+  showTracks: boolean;
 
   setSnapshot: (snapshot: TickSnapshotMessage) => void;
   setSelectedSatellite: (id: string | null) => void;
   setWsConnected: (connected: boolean) => void;
+  setShowDebris: (show: boolean) => void;
+  setShowGroundStations: (show: boolean) => void;
+  setShowTracks: (show: boolean) => void;
 }
 
 export const useOrbitStore = create<OrbitStore>((set) => ({
@@ -24,7 +32,12 @@ export const useOrbitStore = create<OrbitStore>((set) => ({
   satellites: {},
   selectedSatelliteId: 'sat-001',
   activeAlerts: [],
+  recentEvents: [],
+  debrisList: [],
   isWsConnected: false,
+  showDebris: true,
+  showGroundStations: true,
+  showTracks: true,
 
   setSnapshot: (snapshot) => {
     const satMap: Record<string, SatelliteTelemetry> = {};
@@ -37,11 +50,16 @@ export const useOrbitStore = create<OrbitStore>((set) => ({
       timeAcceleration: snapshot.time_acceleration,
       tickNumber: snapshot.tick_number,
       satellites: satMap,
-      activeAlerts: snapshot.active_alerts,
+      activeAlerts: snapshot.active_alerts || [],
+      recentEvents: snapshot.recent_events || [],
+      debrisList: snapshot.debris || [],
     });
   },
 
   setSelectedSatellite: (id) => set({ selectedSatelliteId: id }),
   setWsConnected: (connected) => set({ isWsConnected: connected }),
+  setShowDebris: (show) => set({ showDebris: show }),
+  setShowGroundStations: (show) => set({ showGroundStations: show }),
+  setShowTracks: (show) => set({ showTracks: show }),
 }));
 

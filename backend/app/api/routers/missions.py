@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from app.mission.scheduler import MissionScheduler, MissionTaskItem
 from app.simulation.engine import simulation_engine
 
-router = APIRouter(prefix="/api/missions", tags=["Mission Planning & Optimization"])
+router = APIRouter(tags=["Mission Planning & Optimization"])
 
 scheduler = MissionScheduler(battery_capacity_wh=200.0, min_soc_pct=25.0)
 
@@ -92,6 +92,34 @@ async def trigger_schedule_optimization():
     now = simulation_engine.current_epoch
     results = scheduler.schedule_all(now)
     return results
+
+@router.get("/tasks/{task_id}", response_model=TaskResponsePayload)
+async def get_mission_task(task_id: str):
+    """Retrieves details of a specific mission task."""
+    task = scheduler.tasks.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
+@router.put("/tasks/{task_id}", response_model=TaskResponsePayload)
+async def update_mission_task(task_id: str, payload: TaskCreatePayload):
+    """Updates parameters of an existing submitted mission task."""
+    task = scheduler.tasks.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    task.name = payload.name
+    task.satellite_id = payload.satellite_id
+    task.task_type = payload.task_type
+    task.priority = payload.priority
+    task.duration_seconds = payload.duration_seconds
+    task.energy_cost_wh = payload.energy_cost_wh
+    if payload.earliest_start_epoch:
+        task.earliest_start_epoch = payload.earliest_start_epoch
+    if payload.deadline_epoch:
+        task.deadline_epoch = payload.deadline_epoch
+    task.prerequisites = payload.prerequisites
+    return task
 
 @router.delete("/tasks/{task_id}")
 async def cancel_task(task_id: str):

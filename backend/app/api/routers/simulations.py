@@ -2,9 +2,10 @@ from fastapi import APIRouter, HTTPException
 from app.simulation.engine import simulation_engine
 from app.schemas.schemas import SimulationControlRequest, SimulationStatusResponse
 
-router = APIRouter(prefix="/api/v1/simulations", tags=["Simulations"])
+router = APIRouter(tags=["Simulations"])
 
-@router.get("/status", response_model=SimulationStatusResponse)
+@router.get("/api/v1/simulations/status", response_model=SimulationStatusResponse)
+@router.get("/api/v1/simulation/status", response_model=SimulationStatusResponse)
 async def get_simulation_status():
     return SimulationStatusResponse(
         simulation_id=simulation_engine.simulation_id,
@@ -16,7 +17,8 @@ async def get_simulation_status():
         satellite_count=len(simulation_engine.satellites)
     )
 
-@router.post("/control")
+@router.post("/api/v1/simulations/control")
+@router.post("/api/v1/simulation/control")
 async def control_simulation(req: SimulationControlRequest):
     action = req.action.upper()
     
@@ -43,4 +45,3 @@ async def control_simulation(req: SimulationControlRequest):
         "time_acceleration": simulation_engine.time_acceleration,
         "current_epoch": simulation_engine.current_epoch.isoformat()
     }
-

@@ -7,7 +7,7 @@ import uuid
 from app.simulation.engine import simulation_engine
 from app.conjunction.screener import ConjunctionScreener
 
-router = APIRouter(prefix="/api/conjunctions", tags=["Conjunction Detection & Risk Analysis"])
+router = APIRouter(tags=["Conjunction Detection & Risk Analysis"])
 
 screener = ConjunctionScreener(filter_threshold_km=50.0)
 
@@ -22,11 +22,13 @@ def extract_sat_kepler(sat: Dict[str, Any]) -> Dict[str, float]:
     }
 
 @router.get("", response_model=List[Dict[str, Any]])
+@router.get("/active", response_model=List[Dict[str, Any]])
 async def list_conjunction_alerts():
     """Returns active conjunction alerts currently flagged by the simulation engine."""
     return simulation_engine.active_alerts
 
 @router.post("/screen-all")
+@router.post("/screen")
 async def trigger_full_conjunction_screening(
     horizon_hours: float = Query(24.0, ge=1.0, le=72.0),
     step_seconds: float = Query(60.0, ge=10.0, le=300.0)
@@ -99,3 +101,11 @@ async def trigger_full_conjunction_screening(
         "conjunctions_flagged": len(detected),
         "conjunctions": detected
     }
+
+@router.get("/{conjunction_id}")
+async def get_conjunction_event(conjunction_id: str):
+    """Retrieves specific details of a flagged close approach event."""
+    alert = next((a for a in simulation_engine.active_alerts if a.get("id") == conjunction_id), None)
+    if not alert:
+        raise HTTPException(status_code=404, detail="Conjunction event not found")
+    return alert

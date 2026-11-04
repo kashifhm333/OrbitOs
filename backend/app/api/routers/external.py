@@ -4,7 +4,7 @@ from app.external.nasa_donki import NasaDonkiAdapter
 from app.external.celestrak import CelesTrakAdapter
 from app.external.horizons import HorizonsAdapter
 
-router = APIRouter(prefix="/api/external", tags=["External Data Sources"])
+router = APIRouter(tags=["External Data Sources"])
 
 donki_adapter = NasaDonkiAdapter()
 celestrak_adapter = CelesTrakAdapter()

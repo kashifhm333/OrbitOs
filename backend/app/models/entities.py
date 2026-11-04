@@ -237,3 +237,85 @@ class AuditEvent(Base):
     details = Column(JSON, nullable=True)
     severity = Column(String(20), default="INFO", nullable=False)
 
+
+class FaultInjectionRecord(Base):
+    __tablename__ = "fault_injections"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    satellite_id = Column(String(36), ForeignKey("satellites.id", ondelete="CASCADE"), nullable=False)
+    fault_type = Column(String(50), nullable=False)
+    severity = Column(Float, default=1.0, nullable=False)
+    injected_epoch = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    resolved_epoch = Column(DateTime(timezone=True), nullable=True)
+    status = Column(String(20), default="ACTIVE", nullable=False)
+    details = Column(JSON, nullable=True)
+
+    __table_args__ = (
+        Index("idx_fault_sat_status", "satellite_id", "status"),
+    )
+
+
+class ImageryRecord(Base):
+    __tablename__ = "imagery_records"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    satellite_id = Column(String(36), ForeignKey("satellites.id", ondelete="CASCADE"), nullable=False)
+    mission_id = Column(String(36), nullable=True)
+    capture_epoch = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    resolution_m = Column(Float, default=1.5, nullable=False)
+    fov_deg = Column(Float, default=4.5, nullable=False)
+    spectral_band = Column(String(30), default="RGB", nullable=False)
+    target_name = Column(String(100), default="Earth Target", nullable=False)
+    target_lat = Column(Float, default=0.0, nullable=False)
+    target_lon = Column(Float, default=0.0, nullable=False)
+    image_url = Column(String(255), nullable=False)
+    cloud_cover_pct = Column(Float, default=12.0, nullable=False)
+    is_synthetic = Column(Boolean, default=True, nullable=False)
+    metadata_json = Column(JSON, nullable=True)
+
+    __table_args__ = (
+        Index("idx_imagery_sat_epoch", "satellite_id", "capture_epoch"),
+    )
+
+
+class AlertRecord(Base):
+    __tablename__ = "alert_records"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    alert_type = Column(String(40), default="CONJUNCTION", nullable=False)
+    severity = Column(String(20), default="WARNING", nullable=False)
+    title = Column(String(150), nullable=False)
+    message = Column(Text, nullable=False)
+    source_entity_id = Column(String(50), nullable=True)
+    epoch = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    is_acknowledged = Column(Boolean, default=False, nullable=False)
+    acknowledged_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("idx_alert_severity_ack", "severity", "is_acknowledged"),
+    )
+
+
+class ReportRecord(Base):
+    __tablename__ = "report_records"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    report_type = Column(String(50), default="MISSION_SUMMARY", nullable=False)
+    title = Column(String(150), nullable=False)
+    generated_epoch = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    format = Column(String(20), default="MARKDOWN", nullable=False)
+    content = Column(Text, nullable=False)
+    file_path = Column(String(255), nullable=True)
+
+
+class MLModelMetadata(Base):
+    __tablename__ = "ml_model_metadata"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    model_name = Column(String(50), nullable=False)
+    model_version = Column(String(20), default="1.0.0", nullable=False)
+    trained_epoch = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    hyperparameters = Column(JSON, nullable=True)
+    metrics = Column(JSON, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+

@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     DEFAULT_SCENARIO_SEED: int = Field(default=42)
     ENABLE_STOCHASTIC_FAULTS: bool = Field(default=False)
 
-    NASA_API_KEY: str = Field(default="mCB7BzpD6WCzrJgfJgngMMtgmBmFWhbHCdp8WkJg")
+    NASA_API_KEY: str = Field(default="DEMO_KEY")
     CELESTRAK_CACHE_HOURS: int = Field(default=24)
     HORIZONS_CACHE_DAYS: int = Field(default=7)
 

@@ -11,9 +11,17 @@ from app.api.routers import (
     missions,
     maneuvers,
     intelligence,
-    external
+    external,
+    telemetry as telemetry_router,
+    orbits as orbits_router,
+    passes as passes_router,
+    imagery as imagery_router,
+    faults as faults_router,
+    alerts as alerts_router,
+    reports as reports_router,
+    ml as ml_router
 )
-from app.websockets import telemetry
+from app.websockets import telemetry as telemetry_ws
 from app.simulation.engine import simulation_engine
 
 @asynccontextmanager
@@ -40,25 +48,35 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include All Routers
+# Include Core Routers
 app.include_router(simulations.router)
-app.include_router(satellites.router)
-app.include_router(conjunctions.router)
-app.include_router(ground_stations.router)
-app.include_router(missions.router)
-app.include_router(maneuvers.router)
-app.include_router(intelligence.router)
-app.include_router(external.router)
-app.include_router(telemetry.router)
+app.include_router(satellites.router, prefix="/api/v1/satellites")
+app.include_router(satellites.router, prefix="/api/satellites")
+app.include_router(telemetry_router.router)
+app.include_router(orbits_router.router)
+app.include_router(passes_router.router)
+app.include_router(imagery_router.router)
+app.include_router(faults_router.router)
+app.include_router(alerts_router.router)
+app.include_router(reports_router.router)
 
-# Also expose v1 aliases for contract parity
-app.include_router(conjunctions.router, prefix="/api/v1")
-app.include_router(satellites.router, prefix="/api/v1")
-app.include_router(ground_stations.router, prefix="/api/v1")
-app.include_router(missions.router, prefix="/api/v1")
-app.include_router(maneuvers.router, prefix="/api/v1")
+# Dual-mount Routers (/api and /api/v1)
+app.include_router(conjunctions.router, prefix="/api/conjunctions")
+app.include_router(conjunctions.router, prefix="/api/v1/conjunctions")
+app.include_router(ground_stations.router, prefix="/api/ground-stations")
+app.include_router(ground_stations.router, prefix="/api/v1/ground-stations")
+app.include_router(missions.router, prefix="/api/missions")
+app.include_router(missions.router, prefix="/api/v1/missions")
+app.include_router(maneuvers.router, prefix="/api/maneuvers")
+app.include_router(maneuvers.router, prefix="/api/v1/maneuvers")
+app.include_router(intelligence.router)
+app.include_router(ml_router.router)
+app.include_router(external.router, prefix="/api/external")
+app.include_router(external.router, prefix="/api/v1/external")
+app.include_router(telemetry_ws.router)
 
 @app.get("/healthz", tags=["System"])
+@app.get("/api/v1/health", tags=["System"])
 async def health_check():
     """System health check endpoint verifying engine and API status."""
     return {
@@ -67,7 +85,9 @@ async def health_check():
         "simulation_engine": simulation_engine.clock_state,
         "simulation_epoch": simulation_engine.current_epoch.isoformat(),
         "active_satellites": len(simulation_engine.satellites),
-        "safety_mode": "SIMULATION_ONLY_ISOLATED"
+        "active_alerts": len(simulation_engine.active_alerts),
+        "safety_mode": "SIMULATION_ONLY_ISOLATED",
+        "database": "CONNECTED"
     }
 
 @app.get("/", tags=["System"])

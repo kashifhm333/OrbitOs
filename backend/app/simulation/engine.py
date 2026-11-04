@@ -32,9 +32,41 @@ class SimulationEngine:
         # In-memory entity runtime states
         self.satellites: Dict[str, Dict[str, Any]] = {}
         self.active_alerts: List[Dict[str, Any]] = []
+        self.recent_events: List[Dict[str, Any]] = []
+        self.telemetry_history: Dict[str, List[Dict[str, Any]]] = {}
+
+        # Tracked resident space debris catalog
+        self.resident_debris: List[Dict[str, Any]] = [
+            {
+                "id": "DEBRIS-COSMOS-2251",
+                "name": "Cosmos 2251 Fragment #4812",
+                "a": 6878937.0,
+                "e": 0.0015,
+                "i": 1.70,
+                "Omega": 0.05,
+                "omega": 0.0,
+                "nu": 0.02,
+                "pos_eci": [-6880645.94, -344312.97, -48.46],
+                "vel_eci": [0.0, 0.0, 7590.0]
+            }
+        ]
 
         # Initialize with standard 3 virtual satellites for the vertical slice
         self.initialize_default_fleet()
+
+    def record_event(self, event_type: str, title: str, severity: str = "INFO", satellite_id: Optional[str] = None):
+        """Records a timestamped simulation event for mission control timeline."""
+        evt = {
+            "id": f"evt-{len(self.recent_events) + 1:04d}",
+            "epoch": self.current_epoch.isoformat(),
+            "event_type": event_type,
+            "satellite_id": satellite_id,
+            "title": title,
+            "severity": severity
+        }
+        self.recent_events.insert(0, evt)
+        if len(self.recent_events) > 50:
+            self.recent_events.pop()
 
     def initialize_default_fleet(self):
         """Initializes the baseline 3-satellite constellation for Milestone 1."""
@@ -57,7 +89,15 @@ class SimulationEngine:
                 "vel_eci": [0.0, 7612.4, 0.0],
                 "in_eclipse": False,
                 "subsystem_status": "NOMINAL",
-                "anomaly_score": 0.02
+                "anomaly_score": 0.02,
+                "bus_voltage_v": 28.4,
+                "bus_current_a": 3.8,
+                "battery_temp_c": 19.5,
+                "avionics_temp_c": 28.2,
+                "solar_power_w": 240.0,
+                "downlink_rate_mbps": 15.0,
+                "comm_link_active": True,
+                "active_faults": {}
             },
             "sat-002": {
                 "id": "sat-002",
@@ -77,7 +117,15 @@ class SimulationEngine:
                 "vel_eci": [0.0, 0.0, 7585.0],
                 "in_eclipse": False,
                 "subsystem_status": "NOMINAL",
-                "anomaly_score": 0.05
+                "anomaly_score": 0.05,
+                "bus_voltage_v": 28.2,
+                "bus_current_a": 4.1,
+                "battery_temp_c": 21.0,
+                "avionics_temp_c": 31.4,
+                "solar_power_w": 240.0,
+                "downlink_rate_mbps": 12.0,
+                "comm_link_active": True,
+                "active_faults": {}
             },
             "sat-003": {
                 "id": "sat-003",
@@ -97,9 +145,29 @@ class SimulationEngine:
                 "vel_eci": [0.0, 7557.0, 0.0],
                 "in_eclipse": False,
                 "subsystem_status": "NOMINAL",
-                "anomaly_score": 0.08
+                "anomaly_score": 0.08,
+                "bus_voltage_v": 28.0,
+                "bus_current_a": 4.5,
+                "battery_temp_c": 22.3,
+                "avionics_temp_c": 33.1,
+                "solar_power_w": 240.0,
+                "downlink_rate_mbps": 25.0,
+                "comm_link_active": True,
+                "active_faults": {}
             }
         }
+        for sat_id in self.satellites:
+            self.telemetry_history[sat_id] = []
+        self.recent_events = [
+            {
+                "id": "evt-0001",
+                "epoch": self.start_epoch.isoformat(),
+                "event_type": "INITIALIZATION",
+                "satellite_id": None,
+                "title": "OrbitOS Mission Control Simulation Initialized",
+                "severity": "INFO"
+            }
+        ]
         self.clock_state = "READY"
 
     def register_listener(self, queue: asyncio.Queue):
@@ -118,14 +186,67 @@ class SimulationEngine:
             except Exception:
                 pass
 
+    def get_current_snapshot(self) -> TickSnapshotMessage:
+        """Returns the current state snapshot without advancing the simulation clock."""
+        satellite_snapshots: List[SatelliteTickSnapshot] = []
+
+        # Propagate resident space debris
+        for deb in self.resident_debris:
+            nu_new, r_eci, v_eci = propagate_keplerian(
+                a=deb["a"],
+                e=deb["e"],
+                i=deb["i"],
+                Omega=deb["Omega"],
+                omega=deb["omega"],
+                nu_0=deb["nu"],
+                delta_t=delta_seconds
+            )
+            deb["nu"] = nu_new
+            deb["pos_eci"] = [float(r_eci[0]), float(r_eci[1]), float(r_eci[2])]
+            deb["vel_eci"] = [float(v_eci[0]), float(v_eci[1]), float(v_eci[2])]
+        for sat in self.satellites.values():
+            snapshot = SatelliteTickSnapshot(
+                satellite_id=sat["id"],
+                name=sat["name"],
+                operational_state=sat["operational_state"],
+                position_eci_m=sat["pos_eci"],
+                velocity_eci_mps=sat["vel_eci"],
+                battery_soc_pct=round(sat["battery_soc_pct"], 2),
+                propellant_mass_kg=round(sat["propellant_mass_kg"], 2),
+                in_eclipse=sat.get("in_eclipse", False),
+                subsystem_status=sat.get("subsystem_status", "NOMINAL"),
+                anomaly_score=sat.get("anomaly_score", 0.0),
+                bus_voltage_v=sat.get("bus_voltage_v", 28.0),
+                bus_current_a=sat.get("bus_current_a", 3.8),
+                battery_temp_c=sat.get("battery_temp_c", 20.0),
+                avionics_temp_c=sat.get("avionics_temp_c", 30.0),
+                solar_power_w=sat.get("solar_power_w", 240.0),
+                downlink_rate_mbps=sat.get("downlink_rate_mbps", 12.5),
+                comm_link_active=sat.get("comm_link_active", True)
+            )
+            satellite_snapshots.append(snapshot)
+
+        return TickSnapshotMessage(
+            type="SIMULATION_TICK_SNAPSHOT",
+            simulation_epoch=self.current_epoch,
+            tick_number=self.tick_number,
+            clock_state=self.clock_state,
+            time_acceleration=self.time_acceleration,
+            satellites=satellite_snapshots,
+            active_alerts=self.active_alerts,
+            recent_events=self.recent_events,
+            debris=self.resident_debris
+        )
+
     def step_tick(self) -> TickSnapshotMessage:
         """
         Executes a single discrete simulation tick:
         1. Advance simulation clock.
         2. Propagate orbits for all satellites.
         3. Check eclipse geometry and update battery state.
-        4. Screen for close approaches (conjunctions).
-        5. Return snapshot.
+        4. Update thermal, power, and comm subsystems with active faults.
+        5. Screen for close approaches (conjunctions).
+        6. Return snapshot.
         """
         # Advance simulation time
         self.tick_number += 1
@@ -133,6 +254,21 @@ class SimulationEngine:
         self.current_epoch += timedelta(seconds=delta_seconds)
 
         satellite_snapshots: List[SatelliteTickSnapshot] = []
+
+        # Propagate resident space debris
+        for deb in self.resident_debris:
+            nu_new, r_eci, v_eci = propagate_keplerian(
+                a=deb["a"],
+                e=deb["e"],
+                i=deb["i"],
+                Omega=deb["Omega"],
+                omega=deb["omega"],
+                nu_0=deb["nu"],
+                delta_t=delta_seconds
+            )
+            deb["nu"] = nu_new
+            deb["pos_eci"] = [float(r_eci[0]), float(r_eci[1]), float(r_eci[2])]
+            deb["vel_eci"] = [float(v_eci[0]), float(v_eci[1]), float(v_eci[2])]
 
         for sat_id, sat in self.satellites.items():
             if sat["operational_state"] != "DECOMMISSIONED":
@@ -150,11 +286,18 @@ class SimulationEngine:
                 sat["pos_eci"] = [float(r_eci[0]), float(r_eci[1]), float(r_eci[2])]
                 sat["vel_eci"] = [float(v_eci[0]), float(v_eci[1]), float(v_eci[2])]
 
-                # 2. Eclipse calculation
+                # 2. Eclipse calculation & transition detection
+                was_in_eclipse = sat.get("in_eclipse", False)
                 in_eclipse = check_cylindrical_eclipse(r_eci)
                 sat["in_eclipse"] = in_eclipse
 
+                if not was_in_eclipse and in_eclipse:
+                    self.record_event("ECLIPSE_ENTRY", f"{sat['name']} entered Earth umbra eclipse", "INFO", sat["id"])
+                elif was_in_eclipse and not in_eclipse:
+                    self.record_event("ECLIPSE_EXIT", f"{sat['name']} exited eclipse into direct sunlight", "INFO", sat["id"])
+
                 # 3. Electrical power & battery SoC update
+                active_faults = sat.get("active_faults", {})
                 new_soc, p_solar, p_load, new_mode = update_battery_state_of_charge(
                     current_soc_pct=sat["battery_soc_pct"],
                     operational_state=sat["operational_state"],
@@ -163,6 +306,66 @@ class SimulationEngine:
                 )
                 sat["battery_soc_pct"] = new_soc
                 sat["operational_state"] = new_mode
+
+                # 4. Thermal & bus electrical simulation with fault adjustments
+                if "SOLAR_ARRAY_DROP" in active_faults:
+                    sat["solar_power_w"] = 24.0
+                    sat["subsystem_status"] = "DEGRADED"
+                elif in_eclipse:
+                    sat["solar_power_w"] = 0.0
+                else:
+                    sat["solar_power_w"] = 240.0
+
+                if "VOLTAGE_SPIKE" in active_faults:
+                    sat["bus_voltage_v"] = 34.8
+                    sat["subsystem_status"] = "CRITICAL"
+                elif in_eclipse:
+                    sat["bus_voltage_v"] = round(24.5 + (new_soc / 100.0) * 2.0, 2)
+                else:
+                    sat["bus_voltage_v"] = round(28.0 + (new_soc / 100.0) * 0.4, 2)
+
+                sat["bus_current_a"] = round(4.0 if not in_eclipse else 3.2, 2)
+
+                if "THERMAL_RUNAWAY" in active_faults:
+                    sat["battery_temp_c"] = 68.5
+                    sat["avionics_temp_c"] = 52.0
+                    sat["subsystem_status"] = "CRITICAL"
+                elif in_eclipse:
+                    sat["battery_temp_c"] = round(max(12.0, sat.get("battery_temp_c", 20.0) - 0.01 * delta_seconds), 1)
+                    sat["avionics_temp_c"] = round(max(18.0, sat.get("avionics_temp_c", 30.0) - 0.008 * delta_seconds), 1)
+                else:
+                    sat["battery_temp_c"] = round(min(22.0, sat.get("battery_temp_c", 18.0) + 0.01 * delta_seconds), 1)
+                    sat["avionics_temp_c"] = round(min(32.0, sat.get("avionics_temp_c", 28.0) + 0.008 * delta_seconds), 1)
+
+                if "COMM_FAILURE" in active_faults:
+                    sat["comm_link_active"] = False
+                    sat["downlink_rate_mbps"] = 0.0
+                    sat["subsystem_status"] = "WARNING"
+                else:
+                    sat["comm_link_active"] = True
+                    sat["downlink_rate_mbps"] = 15.0 if not in_eclipse else 10.0
+
+                if not active_faults and sat["subsystem_status"] != "NOMINAL":
+                    sat["subsystem_status"] = "NOMINAL"
+
+            # 5. Append telemetry history point
+            if sat["id"] not in self.telemetry_history:
+                self.telemetry_history[sat["id"]] = []
+            
+            history_entry = {
+                "epoch": self.current_epoch.isoformat(),
+                "battery_soc_pct": round(sat["battery_soc_pct"], 2),
+                "bus_voltage_v": sat.get("bus_voltage_v", 28.0),
+                "bus_current_a": sat.get("bus_current_a", 3.8),
+                "battery_temp_c": sat.get("battery_temp_c", 20.0),
+                "avionics_temp_c": sat.get("avionics_temp_c", 30.0),
+                "solar_power_w": sat.get("solar_power_w", 240.0),
+                "in_eclipse": sat["in_eclipse"],
+                "altitude_km": round((np.linalg.norm(sat["pos_eci"]) - 6378137.0) / 1000.0, 1)
+            }
+            self.telemetry_history[sat["id"]].append(history_entry)
+            if len(self.telemetry_history[sat["id"]]) > 100:
+                self.telemetry_history[sat["id"]].pop(0)
 
             snapshot = SatelliteTickSnapshot(
                 satellite_id=sat["id"],
@@ -174,11 +377,18 @@ class SimulationEngine:
                 propellant_mass_kg=round(sat["propellant_mass_kg"], 2),
                 in_eclipse=sat["in_eclipse"],
                 subsystem_status=sat["subsystem_status"],
-                anomaly_score=sat["anomaly_score"]
+                anomaly_score=sat["anomaly_score"],
+                bus_voltage_v=sat.get("bus_voltage_v", 28.0),
+                bus_current_a=sat.get("bus_current_a", 3.8),
+                battery_temp_c=sat.get("battery_temp_c", 20.0),
+                avionics_temp_c=sat.get("avionics_temp_c", 30.0),
+                solar_power_w=sat.get("solar_power_w", 240.0),
+                downlink_rate_mbps=sat.get("downlink_rate_mbps", 12.5),
+                comm_link_active=sat.get("comm_link_active", True)
             )
             satellite_snapshots.append(snapshot)
 
-        # Basic close-approach screening between satellites
+        # Basic close-approach screening between satellites and debris
         self._screen_fleet_conjunctions()
 
         msg = TickSnapshotMessage(
@@ -188,14 +398,18 @@ class SimulationEngine:
             clock_state=self.clock_state,
             time_acceleration=self.time_acceleration,
             satellites=satellite_snapshots,
-            active_alerts=self.active_alerts
+            active_alerts=self.active_alerts,
+            recent_events=self.recent_events,
+            debris=self.resident_debris
         )
         return msg
 
     def _screen_fleet_conjunctions(self):
-        """Screens distance between active satellite pairs."""
+        """Screens distance between active satellite pairs and tracked resident debris."""
         alerts = []
         sat_list = list(self.satellites.values())
+
+        # Fleet vs Fleet
         for i in range(len(sat_list)):
             for j in range(i + 1, len(sat_list)):
                 s1 = sat_list[i]
@@ -210,10 +424,56 @@ class SimulationEngine:
                     alerts.append({
                         "id": f"conj-{s1['id']}-{s2['id']}",
                         "title": f"Close Approach: {s1['name']} & {s2['name']}",
+                        "primary_satellite_id": s1["id"],
+                        "primary_satellite_name": s1["name"],
+                        "secondary_object_id": s2["id"],
+                        "secondary_object_name": s2["name"],
                         "miss_distance_m": round(dist_m, 1),
                         "risk_level": risk,
                         "epoch": self.current_epoch.isoformat()
                     })
+
+        # Fleet vs Tracked Resident Space Debris
+        for s in sat_list:
+            for deb in self.resident_debris:
+                r_sat = np.array(s["pos_eci"])
+                r_deb = np.array(deb["pos_eci"])
+                dist_m = float(np.linalg.norm(r_sat - r_deb))
+
+                if dist_m < 50000.0:
+                    if dist_m < 50.0:
+                        risk = "CRITICAL"
+                        title = f"COLLISION TOUCH / PROXIMITY: {s['name']} & {deb['name']}"
+                    elif dist_m < 5000.0:
+                        risk = "CRITICAL"
+                        title = f"Critical Conjunction: {s['name']} & {deb['name']}"
+                    else:
+                        risk = "WARNING"
+                        title = f"Close Approach: {s['name']} & {deb['name']}"
+
+                    alerts.append({
+                        "id": f"conj-{s['id']}-{deb['id']}",
+                        "title": title,
+                        "primary_satellite_id": s["id"],
+                        "primary_satellite_name": s["name"],
+                        "secondary_object_id": deb["id"],
+                        "secondary_object_name": deb["name"],
+                        "miss_distance_m": round(dist_m, 1),
+                        "risk_level": risk,
+                        "epoch": self.current_epoch.isoformat(),
+                        "primary_r_eci_m": s["pos_eci"],
+                        "secondary_r_eci_m": deb["pos_eci"]
+                    })
+
+                    # If physical touch point (< 50m) and not recently recorded, record an emergency event
+                    if dist_m < 50.0 and (not self.recent_events or self.recent_events[0].get("title") != title):
+                        self.record_event(
+                            "ORBITAL_COLLISION_ALERT",
+                            f"PHYSICAL CONTACT / CONJUNCTION IMMINENT: {s['name']} and {deb['name']} (separation {dist_m:.1f} m)",
+                            "CRITICAL",
+                            s["id"]
+                        )
+
         self.active_alerts = alerts
 
     async def _run_loop(self):
@@ -248,6 +508,113 @@ class SimulationEngine:
 
     def set_speed(self, rate: float):
         self.time_acceleration = max(0.1, min(100.0, rate))
+
+    def inject_fault(self, satellite_id: str, fault_type: str, severity: float = 1.0) -> Dict[str, Any]:
+        """Injects a hardware/subsystem fault into the specified satellite."""
+        sat = self.satellites.get(satellite_id) or self.satellites.get(satellite_id.lower())
+        if not sat:
+            raise KeyError(f"Satellite {satellite_id} not found in simulation fleet")
+
+        if "active_faults" not in sat:
+            sat["active_faults"] = {}
+        sat["active_faults"][fault_type] = severity
+        sat["subsystem_status"] = "FAULT_INJECTED"
+        
+        self.record_event(
+            "FAULT_INJECTED",
+            f"Fault {fault_type} (severity {severity}x) injected on {sat['name']}",
+            "WARNING",
+            sat["id"]
+        )
+        return {
+            "satellite_id": sat["id"],
+            "fault_type": fault_type,
+            "severity": severity,
+            "status": "ACTIVE"
+        }
+
+    def clear_fault(self, satellite_id: str) -> Dict[str, Any]:
+        """Clears all synthetic faults from the specified satellite."""
+        sat = self.satellites.get(satellite_id) or self.satellites.get(satellite_id.lower())
+        if not sat:
+            raise KeyError(f"Satellite {satellite_id} not found in simulation fleet")
+
+        sat["active_faults"] = {}
+        sat["subsystem_status"] = "NOMINAL"
+        self.record_event(
+            "FAULT_CLEARED",
+            f"All faults cleared on {sat['name']}; restored nominal operations",
+            "INFO",
+            sat["id"]
+        )
+        return {
+            "satellite_id": sat["id"],
+            "status": "CLEARED"
+        }
+
+    def get_active_faults(self) -> List[Dict[str, Any]]:
+        """Returns all currently active injected faults across the constellation."""
+        active = []
+        for sat_id, sat in self.satellites.items():
+            for f_type, sev in sat.get("active_faults", {}).items():
+                active.append({
+                    "satellite_id": sat["id"],
+                    "satellite_name": sat["name"],
+                    "fault_type": f_type,
+                    "severity": sev,
+                    "status": "ACTIVE"
+                })
+        return active
+
+    def add_satellite(self, sat_data: Dict[str, Any]):
+        """Adds a new satellite into the running simulation fleet."""
+        sat_id = sat_data["id"]
+        self.satellites[sat_id] = sat_data
+        self.telemetry_history[sat_id] = []
+        self.record_event(
+            "SATELLITE_DEPLOYED",
+            f"Satellite {sat_data['name']} successfully injected into orbital simulation",
+            "INFO",
+            sat_id
+        )
+
+    def update_satellite(self, satellite_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
+        """Updates configurable properties of a simulated satellite."""
+        sat = self.satellites.get(satellite_id) or self.satellites.get(satellite_id.lower())
+        if not sat:
+            raise KeyError(f"Satellite {satellite_id} not found")
+
+        for key, val in updates.items():
+            if val is not None and key in sat:
+                sat[key] = val
+
+        self.record_event(
+            "SATELLITE_UPDATED",
+            f"Configuration updated for satellite {sat['name']}",
+            "INFO",
+            sat["id"]
+        )
+        return sat
+
+    def delete_satellite(self, satellite_id: str) -> bool:
+        """Decommissions and removes a satellite from the active simulation fleet."""
+        sat = self.satellites.get(satellite_id) or self.satellites.get(satellite_id.lower())
+        if not sat:
+            return False
+
+        sat_name = sat["name"]
+        sat_id = sat["id"]
+        del self.satellites[sat_id]
+        if sat_id in self.telemetry_history:
+            del self.telemetry_history[sat_id]
+
+        self.record_event(
+            "SATELLITE_DECOMMISSIONED",
+            f"Satellite {sat_name} decommissioned and removed from simulation",
+            "WARNING",
+            sat_id
+        )
+        return True
 
 
 # Global Singleton Simulation Engine instance

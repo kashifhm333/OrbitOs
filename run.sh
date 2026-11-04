@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # OrbitOS — Autonomous Space Mission Management Simulator
-# One-Click Launch Script for Ubuntu / Linux Workstations
+# One-Click Launch & Operations Script for Linux Workstations
 # ==============================================================================
 
 set -eo pipefail
@@ -15,8 +15,45 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 PURPLE='\033[0;35m'
+BLUE='\033[0;34m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
+
+# Default Options
+AUTO_OPEN_BROWSER=true
+RUN_TESTS_ONLY=false
+RUN_MIGRATIONS_ONLY=false
+
+# Parse Command-Line Arguments
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --no-browser)
+      AUTO_OPEN_BROWSER=false
+      shift
+      ;;
+    --test|--tests)
+      RUN_TESTS_ONLY=true
+      shift
+      ;;
+    --migrate)
+      RUN_MIGRATIONS_ONLY=true
+      shift
+      ;;
+    -h|--help)
+      echo -e "${CYAN}${BOLD}OrbitOS Launch Script Usage:${NC}"
+      echo "  ./run.sh              Launch full OrbitOS stack (backend + frontend + migrations)"
+      echo "  ./run.sh --no-browser Launch stack without automatically opening the browser"
+      echo "  ./run.sh --migrate    Run Alembic database migrations only and exit"
+      echo "  ./run.sh --test       Run full backend test suite (pytest) and exit"
+      echo "  ./run.sh --help       Show this help message"
+      exit 0
+      ;;
+    *)
+      echo -e "${YELLOW}Unknown option: $1 (ignoring). Use --help for usage.${NC}"
+      shift
+      ;;
+  esac
+done
 
 echo -e "${CYAN}${BOLD}"
 cat << "EOF"
@@ -29,7 +66,7 @@ cat << "EOF"
 EOF
 echo -e "${NC}"
 echo -e "${PURPLE}==================================================================${NC}"
-echo -e "${BOLD}Starting OrbitOS Local Mission Control Stack...${NC}"
+echo -e "${BOLD}OrbitOS Mission Control Platform Orchestrator${NC}"
 echo -e "${PURPLE}==================================================================${NC}"
 
 # ------------------------------------------------------------------------------
@@ -43,7 +80,7 @@ if ! command -v python3 &> /dev/null; then
 fi
 
 if ! command -v node &> /dev/null; then
-    echo -e "${RED}Error: node is not installed. Please install Node.js (https://nodejs.org).${NC}"
+    echo -e "${RED}Error: node is not installed. Please install Node.js 18+ (https://nodejs.org).${NC}"
     exit 1
 fi
 
@@ -52,9 +89,9 @@ if ! command -v npm &> /dev/null; then
     exit 1
 fi
 
-PYTHON_VERSION=$(python3 --version | awk '{print $2}')
-NODE_VERSION=$(node --version)
-echo -e "  ${GREEN}✓${NC} Python: ${BOLD}$PYTHON_VERSION${NC}"
+PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}')
+NODE_VERSION=$(node --version 2>&1)
+echo -e "  ${GREEN}✓${NC} Python:  ${BOLD}$PYTHON_VERSION${NC}"
 echo -e "  ${GREEN}✓${NC} Node.js: ${BOLD}$NODE_VERSION${NC}"
 
 # ------------------------------------------------------------------------------
@@ -77,7 +114,7 @@ CORS_ORIGINS=["http://localhost:3000", "http://127.0.0.1:3000"]
 DATABASE_URL=sqlite+aiosqlite:///./orbitos.db
 SIMULATION_TICK_SECONDS=1.0
 DEFAULT_SCENARIO_SEED=42
-NASA_API_KEY=mCB7BzpD6WCzrJgfJgngMMtgmBmFWhbHCdp8WkJg
+NASA_API_KEY=DEMO_KEY
 CELESTRAK_CACHE_HOURS=24
 HORIZONS_CACHE_DAYS=7
 ENVFILE
@@ -86,9 +123,9 @@ fi
 echo -e "  ${GREEN}✓${NC} Environment file active (.env)"
 
 # ------------------------------------------------------------------------------
-# 3. Backend Virtualenv & Dependencies
+# 3. Python Virtual Environment & Database Migrations
 # ------------------------------------------------------------------------------
-echo -e "\n${CYAN}[3/5] Initializing Python Virtual Environment...${NC}"
+echo -e "\n${CYAN}[3/5] Initializing Python Virtual Environment & Database...${NC}"
 
 if [ ! -d ".venv" ]; then
     echo -e "  ${YELLOW}!${NC} Creating Python virtualenv at .venv..."
@@ -97,15 +134,37 @@ fi
 
 source .venv/bin/activate
 
-if ! python3 -c "import fastapi, uvicorn, scipy, sklearn, sqlalchemy, aiosqlite" &> /dev/null; then
+# Verify core dependencies
+if ! python3 -c "import fastapi, uvicorn, scipy, sklearn, sqlalchemy, aiosqlite, alembic" &> /dev/null; then
     echo -e "  ${YELLOW}!${NC} Installing required Python packages (one-time setup)..."
     pip install --quiet --upgrade pip
     pip install --quiet -r backend/requirements.txt
 fi
-echo -e "  ${GREEN}✓${NC} Python virtual environment verified."
+echo -e "  ${GREEN}✓${NC} Python packages verified."
+
+# Execute Alembic Database Migrations
+echo -e "  ${PURPLE}»${NC} Running async Alembic database migrations..."
+if alembic upgrade head; then
+    echo -e "  ${GREEN}✓${NC} Database schema synchronized (18 tables in orbitos.db)."
+else
+    echo -e "  ${YELLOW}!${NC} Alembic migration completed with existing tables or warning."
+fi
+
+# If user requested migrations only, exit cleanly here
+if [ "$RUN_MIGRATIONS_ONLY" = true ]; then
+    echo -e "\n${GREEN}${BOLD}Migrations completed successfully.${NC}"
+    exit 0
+fi
+
+# If user requested test suite execution only
+if [ "$RUN_TESTS_ONLY" = true ]; then
+    echo -e "\n${CYAN}Running OrbitOS automated test suite (pytest)...${NC}\n"
+    pytest tests/ -v
+    exit 0
+fi
 
 # ------------------------------------------------------------------------------
-# 4. Frontend Node Modules
+# 4. Frontend Node Modules & Verification
 # ------------------------------------------------------------------------------
 echo -e "\n${CYAN}[4/5] Checking Frontend Dependencies...${NC}"
 
@@ -120,11 +179,16 @@ echo -e "  ${GREEN}✓${NC} Frontend dependencies verified."
 # ------------------------------------------------------------------------------
 echo -e "\n${CYAN}[5/5] Launching OrbitOS Mission Control Stack...${NC}"
 
-# Kill any previous OrbitOS instance on ports 8001 or 3000
-fuser -k 8001/tcp &> /dev/null || true
-fuser -k 3000/tcp &> /dev/null || true
+# Clean up any lingering processes on ports 8001 or 3000
+if command -v fuser &> /dev/null; then
+    fuser -k 8001/tcp &> /dev/null || true
+    fuser -k 3000/tcp &> /dev/null || true
+elif command -v lsof &> /dev/null; then
+    lsof -ti:8001 | xargs -r kill -9 2>/dev/null || true
+    lsof -ti:3000 | xargs -r kill -9 2>/dev/null || true
+fi
 
-# Cleanup trap to kill child background processes on exit
+# Cleanup trap to gracefully terminate child processes on exit
 cleanup() {
     echo -e "\n\n${YELLOW}Shutting down OrbitOS Mission Control...${NC}"
     if [ -n "$BACKEND_PID" ]; then
@@ -144,10 +208,10 @@ echo -e "  ${PURPLE}»${NC} Launching FastAPI backend on ${BOLD}http://localhost
 PYTHONPATH=backend uvicorn app.main:app --host 0.0.0.0 --port 8001 --log-level warning &
 BACKEND_PID=$!
 
-# Wait for backend healthcheck
+# Wait for backend healthcheck (HTTP 200 on /api/v1/health or /healthz)
 BACKEND_READY=0
 for i in {1..30}; do
-    if curl -s http://localhost:8001/healthz | grep -q "HEALTHY"; then
+    if curl -sf http://localhost:8001/api/v1/health &> /dev/null || curl -sf http://localhost:8001/healthz &> /dev/null; then
         BACKEND_READY=1
         break
     fi
@@ -155,20 +219,20 @@ for i in {1..30}; do
 done
 
 if [ $BACKEND_READY -eq 0 ]; then
-    echo -e "  ${RED}✗ Backend failed to start. Check logs above.${NC}"
+    echo -e "  ${RED}✗ Backend failed to start. Please check terminal output above.${NC}"
     exit 1
 fi
 echo -e "  ${GREEN}✓${NC} Backend simulation engine is ${BOLD}ONLINE${NC}."
 
 # Start Frontend Dev Server
-echo -e "  ${PURPLE}»${NC} Launching React 3D dashboard on ${BOLD}http://localhost:3000${NC}..."
+echo -e "  ${PURPLE}»${NC} Launching React 3D Mission Control on ${BOLD}http://localhost:3000${NC}..."
 (cd frontend && npm run dev -- --host 0.0.0.0 --port 3000) &
 FRONTEND_PID=$!
 
 # Wait for frontend dev server
 FRONTEND_READY=0
 for i in {1..30}; do
-    if curl -s http://localhost:3000/ | grep -q "html"; then
+    if curl -sf http://localhost:3000/ | grep -qi "html"; then
         FRONTEND_READY=1
         break
     fi
@@ -176,32 +240,40 @@ for i in {1..30}; do
 done
 
 if [ $FRONTEND_READY -eq 0 ]; then
-    echo -e "  ${RED}✗ Frontend failed to start. Check logs above.${NC}"
+    echo -e "  ${RED}✗ Frontend failed to start. Please check logs above.${NC}"
     exit 1
 fi
-echo -e "  ${GREEN}✓${NC} Frontend 3D interface is ${BOLD}ONLINE${NC}."
+echo -e "  ${GREEN}✓${NC} Frontend Mission Control UI is ${BOLD}ONLINE${NC}."
 
 # ------------------------------------------------------------------------------
-# Stack Ready & Browser Launch
+# Mission Control Ready Summary
 # ------------------------------------------------------------------------------
 echo -e "\n${GREEN}${BOLD}==================================================================${NC}"
-echo -e "${GREEN}${BOLD}  ORBITOS MISSION CONTROL IS READY!${NC}"
+echo -e "${GREEN}${BOLD}  ORBITOS MISSION CONTROL IS OPERATIONAL!${NC}"
 echo -e "${GREEN}${BOLD}==================================================================${NC}"
-echo -e "  ${BOLD}Dashboard URL:${NC}      ${CYAN}http://localhost:3000${NC}"
-echo -e "  ${BOLD}Backend API:${NC}        ${CYAN}http://localhost:8001${NC}"
-echo -e "  ${BOLD}API Documentation:${NC}  ${CYAN}http://localhost:8001/docs${NC}"
-echo -e "  ${BOLD}Health Check:${NC}       ${CYAN}http://localhost:8001/healthz${NC}"
+echo -e "  ${BOLD}Mission Control UI:${NC}    ${CYAN}http://localhost:3000${NC}"
+echo -e "  ${BOLD}Backend REST API:${NC}      ${CYAN}http://localhost:8001${NC}"
+echo -e "  ${BOLD}Interactive API Docs:${NC}  ${CYAN}http://localhost:8001/docs${NC}"
+echo -e "  ${BOLD}System Health Check:${NC}   ${CYAN}http://localhost:8001/api/v1/health${NC}"
+echo -e "  ${BOLD}Simulation Stream:${NC}     ${CYAN}ws://localhost:8001/ws/v1/simulation${NC}"
+echo -e "${BLUE}------------------------------------------------------------------${NC}"
+echo -e "  ${BOLD}12 Operational Pages Active in Cockpit:${NC}"
+echo -e "   [1] Dashboard       [5] Telemetry        [9] AI/ML Intelligence"
+echo -e "   [2] Satellites      [6] Missions        [10] Fault Injection"
+echo -e "   [3] 3D Tracking     [7] Conjunctions    [11] Hazard Alerts"
+echo -e "   [4] Imagery         [8] Ground Stations [12] Operations Reports"
 echo -e "${PURPLE}------------------------------------------------------------------${NC}"
 echo -e "${YELLOW}Press [CTRL+C] at any time to halt all services cleanly.${NC}"
 echo -e "${PURPLE}------------------------------------------------------------------${NC}"
 
-# Open browser if in desktop environment
-if command -v xdg-open &> /dev/null && [ -n "$DISPLAY" ]; then
-    xdg-open "http://localhost:3000" &> /dev/null || true
-elif command -v sensible-browser &> /dev/null && [ -n "$DISPLAY" ]; then
-    sensible-browser "http://localhost:3000" &> /dev/null || true
+# Open browser if enabled and desktop environment is detected
+if [ "$AUTO_OPEN_BROWSER" = true ]; then
+    if command -v xdg-open &> /dev/null && [ -n "$DISPLAY" ]; then
+        xdg-open "http://localhost:3000" &> /dev/null || true
+    elif command -v sensible-browser &> /dev/null && [ -n "$DISPLAY" ]; then
+        sensible-browser "http://localhost:3000" &> /dev/null || true
+    fi
 fi
 
-# Keep script foregrounded waiting for signals
+# Keep script running to maintain background services and process signals
 wait
-

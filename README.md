@@ -6,9 +6,10 @@
 [![React: 18](https://img.shields.io/badge/React-18-61dafb.svg)](https://react.dev/)
 [![Three.js: R3F](https://img.shields.io/badge/Three.js-R3F-black.svg)](https://threejs.org/)
 [![Scikit-Learn](https://img.shields.io/badge/Scikit--Learn-ML%20Intelligence-orange.svg)](https://scikit-learn.org/)
+[![Alembic: Migrations](https://img.shields.io/badge/Alembic-Async%20DB%20Migrations-purple.svg)](https://alembic.sqlalchemy.org/)
 [![Docker: Compose](https://img.shields.io/badge/Docker-Compose-2496ed.svg)](https://www.docker.com/)
 
-> **OrbitOS** is an educational and research-oriented autonomous space mission management simulator. It runs entirely on a standard developer workstation or laptop, modeling virtual satellite constellations, Newtonian Keplerian orbital dynamics, multi-subsystem telemetry, global ground station contact passes, automated orbital conjunction screening, autonomous collision avoidance maneuver planning, and machine learning telemetry anomaly detection.
+> **OrbitOS** is a production-grade, aerospace-grade autonomous space mission management and simulation platform. It runs on a standard developer workstation or laptop, modeling virtual satellite constellations, Newtonian Keplerian orbital dynamics, multi-subsystem telemetry, global ground station contact passes, automated orbital conjunction screening, autonomous collision avoidance maneuver planning, machine learning telemetry anomaly detection, hardware subsystem fault injection, synthetic Earth observation imagery, and automated mission reporting.
 
 ---
 
@@ -18,26 +19,24 @@
 
 ---
 
-## 1. Problem Statement: Which Problem Does OrbitOS Solve?
+## 1. System Transformation & OrbitTrack Aerospace Design System
 
-The modern orbital environment is experiencing an unprecedented surge in satellite deployments. With the advent of commercial mega-constellations (Starlink, OneWeb, Project Kuiper) and over 36,000 tracked pieces of orbital space debris larger than 10 cm, **satellite fleet management has become too complex for manual human piloting alone**.
+OrbitOS has been transformed into a production-grade aerospace mission control application adhering to the **OrbitTrack** visual design system:
 
-However, learning or researching modern autonomous satellite fleet operations faces several critical barriers:
-1. **Proprietary & Classified Software:** Real-world Flight Dynamics Systems (FDS) and Space Situational Awareness (SSA) tools are tightly guarded, export-controlled, or prohibitively expensive for students, researchers, and software engineers.
-2. **Physics vs. Operations Disconnect:** Standard academic simulators either focus solely on pure astrodynamic physics (e.g., differential equation orbital integrators) with zero spacecraft subsystem modeling, or on high-level scheduling without real physics.
-3. **Heavyweight Infrastructure:** Existing aerospace suites require dedicated clusters, cloud contracts, or physical Software Defined Radios (SDR), preventing zero-setup local research on personal laptops.
-4. **Lack of Explainable Autonomy:** Black-box autonomous algorithms often fail to provide transparent reasoning when rescheduling tasks or staging evasive maneuvers.
-
-### How OrbitOS Solves These Challenges
-
-OrbitOS bridges this gap by providing an **integrated, fully open-source, reproducible simulation ecosystem** that runs on a single computer:
-
-- **Unified Multi-Domain Modeling:** Integrates orbital mechanics (Keplerian analytical propagation and RK4 numerical integration with $J_2$ oblateness perturbations), electrical power dynamics (solar array generation, battery charging/discharging, eclipse geometry), and thermal envelopes.
-- **Automated Space Traffic Management (STM):** Implements a 3-tier hierarchical conjunction screening sieve to detect close encounters ($d_{\text{miss}} < 5\text{ km}$) and automatically generates, ranks, and executes delta-v ($\Delta v$) evasion burns using the Tsiolkovsky rocket equation.
-- **Constraint-Driven Mission Scheduling:** Deploys a Priority-Weighted Greedy Earliest-Deadline-First (EDF) scheduler that handles task dependencies (DAG), battery depth-of-discharge constraints, and priority preemption for emergency burns.
-- **Offline-First Resilience:** Ingests live space weather (NASA DONKI), satellite elements (CelesTrak GP/TLE), and celestial ephemeris (NASA JPL Horizons) when online, while seamlessly falling back to bundled static seeds when offline.
-- **AI/ML Telemetry Intelligence:** Deploys lightweight Scikit-learn Isolation Forest multivariate anomaly detectors and Ridge regression resource forecasters to diagnose sensor anomalies and predict 24-hour battery/propellant curves.
-- **Formal Verification:** Enforces non-negotiable physical invariants ($0 \le \text{SoC} \le 100\%$, $m_{\text{fuel}} \ge 0$, positive dry mass) specified in formal VDM-SL and validated by automated Hypothesis property testing.
+- **Aerospace Color Palette:** Deep space backgrounds (`#050B16`, `#071426`, `#091A30`), elevated panels (`#10243B`), primary cyan accents (`#00D5FF`), secondary flight blue (`#1677FF`), telemetry success emerald (`#00D69A`), hazard warning amber (`#FFB547`), and critical red (`#FF4D5E`).
+- **Persistent Global Navigation:** 12 dedicated functional views accessible via the primary sidebar:
+  1. **Dashboard:** Centerpiece 3D Earth globe, real-time subsystem telemetry, passes, orbital parameters, and event log.
+  2. **Satellites:** Fleet inventory, orbital element configuration, mass budget, deployment modal, and lifecycle control.
+  3. **Tracking:** 3D ECI/ECEF tracking viewport with sub-satellite latitude/longitude, altitude, speed, and target switching.
+  4. **Imagery:** Synthetic Earth observation catalog, spectral band filter (RGB, NIR, Thermal IR), and vector SVG exporter.
+  5. **Telemetry:** Multi-subsystem bus waveforms (voltage, current, power, temperatures) and historical query buffer.
+  6. **Missions:** Earliest-Deadline-First task queue, task submission modal, energy feasibility check, and optimization trigger.
+  7. **Conjunctions:** 3-tier collision screening sieve, close approach miss distance, collision probability ($P_c$), and Tsiolkovsky $\Delta v$ burns.
+  8. **Ground Stations:** Global station registry, contact visibility matrix with azimuth/elevation, FSPL link budget, and station onboarding.
+  9. **AI / ML Intelligence:** Unsupervised Isolation Forest anomaly detection, feature explainability, and 24-hour Ridge regression battery SoC forecast with confidence intervals.
+  10. **Hardware Fault Injection:** Controlled anomaly injection studio (solar array drop, thermal runaway, voltage surge, battery degradation, RF loss) with FDIR verification.
+  11. **Alerts Center:** Filterable hazard log, operator acknowledgment flow, severity tagging (Critical, Warning, Info), and audit trail.
+  12. **Settings:** Simulation clock rate, 3D viewport particle density and layer configuration, and system safety isolation diagnostics.
 
 ---
 
@@ -47,15 +46,15 @@ OrbitOS bridges this gap by providing an **integrated, fully open-source, reprod
 OrbitOS/
 ├── frontend/                     # React 18 + Three.js / React Three Fiber + TailwindCSS + Zustand
 │   ├── src/
-│   │   ├── components/
-│   │   │   ├── visualization/    # 3D Earth globe, Keplerian orbit tracks, satellite meshes
-│   │   │   ├── panels/           # Fleet, Telemetry, Conjunctions, Missions, Ground, AI/ML
-│   │   │   └── common/           # Mission control header, clock controls, system status
-│   │   └── store/                # Zustand real-time simulation state & WebSocket listeners
+│   │   ├── components/           # Topbar, Sidebar, RightPanel, BottomStrip, 3D OrbitalCanvas
+│   │   ├── features/             # 12 dedicated mission control page views
+│   │   ├── store/                # Zustand simulation state store & WebSocket listeners
+│   │   └── types/                # Strongly-typed aerospace schemas & telemetry models
 ├── backend/                      # FastAPI async REST API + WebSocket streaming
 │   ├── app/
+│   │   ├── api/routers/          # REST endpoints (telemetry, orbits, passes, imagery, faults, alerts, reports, ml...)
 │   │   ├── astrodynamics/        # Kepler solver, ECI/ECEF/SEZ frames, RK4 integrator
-│   │   ├── bus/                  # Electrical power (EPS), eclipse shadow, battery dynamics
+│   │   ├── bus/                  # Electrical power (EPS), eclipse shadow, battery & thermal dynamics
 │   │   ├── simulation/           # Stepped clock loop, discrete tick pipeline, event queue
 │   │   ├── conjunction/          # 3-tier screening sieve, Brent's root-finder, TCA calculator
 │   │   ├── maneuver/             # LVLH delta-v candidate generator, Tsiolkovsky fuel budgeting
@@ -63,59 +62,31 @@ OrbitOS/
 │   │   ├── ground/               # Topocentric SEZ frames, AOS/LOS passes, RF FSPL link budget
 │   │   ├── ml/                   # Isolation Forest anomaly detector, 24-hr resource forecaster
 │   │   ├── external/             # Adapters for NASA DONKI, CelesTrak, NASA JPL Horizons
-│   │   └── models/               # SQLAlchemy 2.0 async database entities (SQLite/PostgreSQL)
+│   │   └── models/               # SQLAlchemy 2.0 async database entities (18 tables)
+├── alembic/                      # Async Alembic database migrations environment
 ├── formal-specifications/        # Formal VDM-SL mathematical safety contracts
-├── tests/                        # 37 Automated unit, integration, and property-based tests
+├── tests/                        # 46 Automated unit, integration, and property-based tests
 ├── data/seeds/                   # Static offline fallback datasets for external providers
-├── docs/                         # Authoritative 20-document engineering specification suite
+├── docs/                         # Authoritative engineering specification suite
 └── docker-compose.yml            # Multi-container production deployment definition
 ```
 
 ---
 
-## 3. How to Run the Project
+## 3. How to Run OrbitOS
 
-OrbitOS supports both **native local development** (zero-overhead execution) and **Docker Compose** containerization.
+OrbitOS supports both **native local development** and **Docker Compose** containerization.
 
 ### Prerequisites
 - **Python:** Version `3.12` or higher
-- **Node.js:** Version `18.0` or higher (Node `20+` or `22+` recommended)
-- **Git** (optional, for version management)
-- **Docker & Docker Compose** (optional, for containerized run)
+- **Node.js:** Version `18.0` or higher (Node `20+` recommended)
+- **Docker & Docker Compose** (optional)
 
 ---
 
 ### Method A: Native Local Execution (Recommended for Fast Development)
 
-#### Step 1: Environment Setup
-Clone or enter the project directory:
-```bash
-cd /path/to/orbit
-```
-
-Inspect or create your `.env` configuration file (a default `.env` and `.env.example` are pre-configured):
-```ini
-ENVIRONMENT=development
-LOG_LEVEL=INFO
-
-API_HOST=0.0.0.0
-API_PORT=8001
-CORS_ORIGINS=["http://localhost:3000", "http://127.0.0.1:3000"]
-
-# Dual-database support: runs zero-setup SQLite out of the box
-DATABASE_URL=sqlite+aiosqlite:///./orbitos.db
-
-SIMULATION_TICK_SECONDS=1.0
-DEFAULT_SCENARIO_SEED=42
-
-# NASA Open API Key (demo key or user key)
-NASA_API_KEY=mCB7BzpD6WCzrJgfJgngMMtgmBmFWhbHCdp8WkJg
-CELESTRAK_CACHE_HOURS=24
-HORIZONS_CACHE_DAYS=7
-```
-
-#### Step 2: Set Up and Run the Python Backend
-Create a virtual environment and install backend dependencies:
+#### Step 1: Backend Setup & Database Migrations
 ```bash
 # Create virtual environment
 python3 -m venv .venv
@@ -124,16 +95,19 @@ source .venv/bin/activate
 # Install dependencies
 pip install -r backend/requirements.txt
 
-# Start FastAPI simulation server
+# Run Alembic async database migrations (creates 18 tables in orbitos.db)
+alembic upgrade head
+
+# Start FastAPI simulation server on port 8001
 PYTHONPATH=backend uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
 ```
-The backend initializes the SQLite database schema automatically and starts the simulation engine.  
-- **Backend API:** [http://localhost:8001](http://localhost:8001)
-- **Swagger Documentation:** [http://localhost:8001/docs](http://localhost:8001/docs)
-- **Health Check:** [http://localhost:8001/healthz](http://localhost:8001/healthz)
 
-#### Step 3: Set Up and Run the Frontend Dashboard
-Open a new terminal window:
+- **Backend API:** [http://localhost:8001](http://localhost:8001)
+- **Interactive Swagger Docs:** [http://localhost:8001/docs](http://localhost:8001/docs)
+- **Health Check:** [http://localhost:8001/api/v1/health](http://localhost:8001/api/v1/health)
+
+#### Step 2: Frontend Setup
+In a new terminal window:
 ```bash
 cd frontend
 
@@ -143,40 +117,39 @@ npm install
 # Start Vite development server
 npm run dev
 ```
-The dashboard starts on **[http://localhost:3000](http://localhost:3000)** and automatically proxies `/api` and `/ws` requests to the backend on port `8001`.
+
+The mission control cockpit starts at **[http://localhost:3000](http://localhost:3000)** and automatically proxies API requests and WebSockets to the backend on port `8001`.
 
 ---
 
-### Method B: Single-Command Docker Compose
+### Method B: Docker Compose Multi-Container Deployment
 
-If you have Docker and Docker Compose installed, run the entire multi-container stack (PostgreSQL 16, FastAPI backend, and Nginx/React frontend) with one command:
-
+Run the complete multi-container stack with one command:
 ```bash
 docker compose up --build
 ```
 
-To run in the background (detached mode):
+To run in detached background mode:
 ```bash
 docker compose up -d
 ```
 
-To stop the containers:
+To stop containers:
 ```bash
 docker compose down
 ```
 
 ---
 
-### Step 4: Running the Automated Test Suite
+### Step 3: Running the Automated Test Suite
 
-Verify that all 37 unit, integration, and property-based tests pass:
-
+Verify that all 46 unit, integration, and property-based tests pass:
 ```bash
 source .venv/bin/activate
 pytest tests/ -v
 ```
 
-To build the frontend production assets without errors:
+Build the frontend production bundle ($0$ TypeScript errors):
 ```bash
 cd frontend
 npm run build
@@ -184,86 +157,41 @@ npm run build
 
 ---
 
-## 4. How to Use OrbitOS (User Guide)
+## 4. API Reference Summary
 
-When you open **[http://localhost:3000](http://localhost:3000)**, you are presented with the Mission Control Cockpit:
+OrbitOS exposes an aerospace REST API and real-time WebSockets:
 
-```text
-+----------------------------------------------------------------------------------------------------+
-|  [ORBITOS v1.0]     [PLAY] [PAUSE] [STEP] [RESET]   [1x][5x][10x]   Epoch: 2026-11-04 12:00:00 UTC |
-+-------------------------------------------------------------+--------------------------------------+
-|                                                             |  [Fleet] [Telemetry] [Conjunctions]  |
-|                                                             |  [Missions] [Ground] [AI/ML]         |
-|                                                             |--------------------------------------|
-|                     3D WebGL Viewport                       |                                      |
-|                                                             |  Active Panel Content:               |
-|            (Interactive Earth Globe + Orbits)               |  - Satellite State Cards             |
-|                                                             |  - Live Subsystem Charts             |
-|                  [Enable 2D Viewport]                       |  - Evasion Maneuver Buttons          |
-|                                                             |  - Mission Task Optimizer            |
-|                                                             |  - Pass Schedules (AOS/LOS)          |
-|                                                             |  - Anomaly Score & Fault Injection   |
-+-------------------------------------------------------------+--------------------------------------+
-```
-
-### 1. Controlling the Simulation Clock
-Located in the center of the top navigation bar:
-- **Play (`▶`):** Starts continuous real-time simulation clock advancement.
-- **Pause (`⏸`):** Freezes the simulation clock at the current tick for in-depth inspection.
-- **Step Forward (`⏭`):** Advances the simulation by exactly one discrete tick ($1.0\text{ s}$).
-- **Reset (`↺`):** Reinitializes the simulation epoch back to default scenario conditions (`2026-11-04 12:00:00 UTC`).
-- **Speed Multiplier:** Accelerate simulation time up to $10\times$ or $50\times$ to observe full 90-minute orbital periods in seconds.
-
-### 2. Navigating the 3D Orbital Viewport
-- **Rotate:** Click and drag left mouse button around the Earth globe.
-- **Zoom:** Use mouse scroll wheel to zoom from Low Earth Orbit down to surface altitude.
-- **Pan:** Right-click and drag to adjust camera center.
-- **Select Satellite:** Click directly on any satellite mesh or orbit track spline in the 3D scene to focus and inspect its telemetry.
-- **2D Mode Toggle:** Click `2D VIEW` in the upper-left overlay to disable WebGL rendering on low-power laptops or battery-saver mode.
-
-### 3. Monitoring Fleet Health (`Fleet` Tab)
-- Displays all virtual satellites currently in the constellation (`OrbitOS-Alpha`, `OrbitOS-Beta`, `OrbitOS-Gamma`).
-- Shows real-time semi-major axis ($a$), altitude, eccentricity ($e$), inclination ($i$), battery State-of-Charge (SoC), and remaining chemical propellant mass ($m_{\text{fuel}}$).
-- Identifies whether the spacecraft is in direct sunlight or Earth's cylindrical shadow (eclipse).
-
-### 4. Deep Telemetry Diagnostics (`Telemetry` Tab)
-- Detailed electrical power subsystem (EPS) telemetry: bus voltage ($28\text{ V}$ nominal), bus current, battery temperature ($^\circ\text{C}$), avionics temperature, and solar array output ($240\text{ W}$ in sunlight, $0\text{ W}$ in eclipse).
-- Observes battery charge recovery when exiting eclipse and safe-hold transitions if battery drains below $15\%$.
-
-### 5. Managing Close Encounters & Avoidance Burns (`Conjunctions` Tab)
-- Click **"TRIGGER 3-TIER SCREENING"** to screen active satellites against secondary objects and orbital debris over a 24-hour lookahead horizon.
-- Conjunctions are automatically categorized by miss distance:
-  - `INFO`: $d_{\text{miss}} \ge 10\text{ km}$
-  - `WATCH`: $5\text{ km} \le d_{\text{miss}} < 10\text{ km}$
-  - `WARNING`: $1\text{ km} \le d_{\text{miss}} < 5\text{ km}$
-  - `CRITICAL`: $d_{\text{miss}} < 1\text{ km}$
-- Click **"EVALUATE MANEUVERS"** to generate 4 canonical candidate strategies:
-  1. *In-Track Prograde ($+\Delta v_t$):* Arrives later at junction point.
-  2. *In-Track Retrograde ($-\Delta v_t$):* Arrives earlier at junction point.
-  3. *Cross-Track Normal ($+\Delta v_c$):* Lateral out-of-plane displacement.
-  4. *No-Action:* Baseline reference.
-- Review fuel expenditure computed via the Tsiolkovsky rocket equation.
-- Click **"SIMULATED APPROVAL"** to arm the candidate, then **"EXECUTE BURN"** to apply the impulsive $\Delta \vec{v}$ to the satellite's state vector and deduct propellant mass.
-
-### 6. Scheduling Mission Activities (`Missions` Tab)
-- Submit mission payload tasks: Earth Observation Imaging, RF Surveillance, Data Downlinks, or Calibration.
-- Configure priority (1 to 5), duration in seconds, and required energy cost in Watt-hours.
-- Click **"OPTIMIZE (EDF)"** to run the priority-weighted greedy Earliest-Deadline-First optimization. The engine sorts task dependency DAGs, verifies battery depth-of-discharge constraints ($> 25\%$ SoC), and automatically preempts lower-priority activities for critical operations.
-
-### 7. Tracking Ground Station Passes (`Ground` Tab)
-- Monitors global tracking stations: **Svalbard Satellite Station** (`GS-SVAL`), **Singapore Earth Station** (`GS-SGP`), and **Santiago Tracking Station** (`GS-SCL`).
-- Real-time indicator displays **`CARRIER LOCK`** when the satellite's elevation angle exceeds the horizon mask ($\theta_{\text{elev}} \ge 10^\circ$).
-- Predicts upcoming contact passes over a 12-hour horizon, reporting Acquisition of Signal (AOS), Peak Elevation ($\theta_{\text{max}}$), Loss of Signal (LOS), and Free-Space Path Loss (FSPL) in decibels.
-
-### 8. AI/ML Telemetry Intelligence & Fault Injection (`AI/ML` Tab)
-- Real-time **Isolation Forest** gauge displays continuous anomaly confidence ($0\%$ to $100\%$).
-- **Explainable Diagnostics:** Identifies the primary feature deviation driver (e.g. voltage drop, temperature spike, negative net power).
-- **Synthetic Fault Injection Sandbox:**
-  - Inject *Solar Array Degradation* (simulates micro-meteoroid impact reducing power by 40%).
-  - Inject *Thermal Runaway* (simulates radiator failure adding $+15^\circ\text{C}$).
-  - Inject *Voltage Spike* (simulates power bus surge).
-  - Observe the ML model detect the anomaly within ticks, then click **"RESET NOMINAL"** to clear the fault.
-- **Resource Forecaster:** Displays 24-hour predictive battery State-of-Charge and propellant curves with $95\%$ confidence bounds.
+| Category | Endpoint | Method | Description |
+| :--- | :--- | :--- | :--- |
+| **Simulation** | `/api/v1/simulations/control` | `POST` | Control simulation clock (`PLAY`, `PAUSE`, `STEP`, `RESET`, `SET_SPEED`) |
+| **Simulation** | `/api/v1/simulations/status` | `GET` | Retrieve simulation epoch, tick number, acceleration, and state |
+| **Satellites** | `/api/v1/satellites` | `GET`, `POST` | List all satellites or deploy a new spacecraft |
+| **Satellites** | `/api/v1/satellites/{id}` | `GET`, `PUT`, `DELETE` | Inspect, update parameters, or decommission satellite |
+| **Telemetry** | `/api/v1/telemetry/{id}/latest` | `GET` | Subsystem telemetry snapshot (power, thermal, attitude, RF) |
+| **Telemetry** | `/api/v1/telemetry/{id}/history` | `GET` | Historical sliding buffer for waveform trend analysis |
+| **Orbits** | `/api/v1/orbits/{id}` | `GET` | Keplerian orbital elements and propagated ECI state vector |
+| **Orbits** | `/api/v1/orbits/{id}/trajectory`| `GET` | Interpolated 3D orbital trajectory spline coordinates |
+| **Passes** | `/api/v1/passes/{id}` | `GET` | Calculated upcoming ground station contact passes over horizon |
+| **Passes** | `/api/v1/passes/upcoming` | `GET` | Global fleet-wide upcoming ground passes schedule |
+| **Imagery** | `/api/v1/imagery` | `GET` | Catalog of captured Earth observation images |
+| **Imagery** | `/api/v1/imagery/generate` | `POST` | Trigger synthetic optical observation capture |
+| **Imagery** | `/api/v1/imagery/{id}/download` | `GET` | Export captured imagery as synthetic vector SVG |
+| **Faults** | `/api/v1/faults/inject` | `POST` | Inject controlled subsystem anomaly (solar drop, thermal runaway...) |
+| **Faults** | `/api/v1/faults/clear/{id}` | `POST` | Clear active injected faults and return subsystem to nominal |
+| **Faults** | `/api/v1/faults/active` | `GET` | Retrieve currently active faults across the constellation |
+| **Alerts** | `/api/v1/alerts` | `GET` | Active system and conjunction hazard alerts |
+| **Alerts** | `/api/v1/alerts/{id}/acknowledge`| `POST` | Operator acknowledgment workflow |
+| **Reports** | `/api/v1/reports/generate` | `POST` | Generate formal markdown report (Mission, Telemetry, Conjunction) |
+| **Reports** | `/api/v1/reports/{id}/download` | `GET` | Download generated operations report |
+| **AI / ML** | `/api/v1/ml/anomaly/{id}` | `GET` | Isolation Forest anomaly score and feature explainability |
+| **AI / ML** | `/api/v1/ml/forecast/{id}` | `GET` | 24-hour predictive SoC and propellant curves with 95% CIs |
+| **Conjunctions**| `/api/conjunctions/screen` | `POST` | 3-tier collision screening against secondary debris objects |
+| **Maneuvers** | `/api/maneuvers/candidates/{id}`| `GET` | Generate 4 LVLH impulsive delta-v evasion burn strategies |
+| **Missions** | `/api/missions/tasks` | `GET`, `POST` | Submit mission tasks or retrieve scheduled queue |
+| **Missions** | `/api/missions/optimize` | `POST` | Execute Priority-Weighted Greedy EDF optimization |
+| **Ground** | `/api/ground-stations` | `GET`, `POST` | Ground station registry and onboarding |
+| **Ground** | `/api/ground-stations/status` | `GET` | Real-time azimuth, elevation, and FSPL link budget status |
+| **WebSockets** | `/ws/v1/simulation` | `WS` | Non-blocking simulation tick broadcast stream |
 
 ---
 

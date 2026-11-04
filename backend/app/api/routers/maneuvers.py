@@ -8,7 +8,7 @@ from app.maneuver.planner import ManeuverPlanner, calculate_fuel_consumption
 from app.simulation.engine import simulation_engine
 from app.astrodynamics.converters import cartesian_to_keplerian
 
-router = APIRouter(prefix="/api/maneuvers", tags=["Autonomous Maneuver Planning"])
+router = APIRouter(tags=["Autonomous Maneuver Planning"])
 
 stored_plans: Dict[str, Dict[str, Any]] = {}
 

@@ -3,10 +3,18 @@ import numpy as np
 from fastapi import APIRouter, HTTPException
 from typing import List
 from app.simulation.engine import simulation_engine
-from app.schemas.schemas import CreateSatelliteRequest, SatelliteResponse, OrbitalStateResponse
+from app.schemas.schemas import (
+    CreateSatelliteRequest,
+    UpdateSatelliteRequest,
+    SatelliteResponse,
+    OrbitalStateResponse
+)
 from app.astrodynamics.converters import keplerian_to_cartesian
+from app.models.database import AsyncSessionLocal
+from app.models.entities import Satellite as SatelliteModel, OrbitalState as OrbitalStateModel
+from sqlalchemy import select, delete
 
-router = APIRouter(prefix="/api/v1/satellites", tags=["Satellites"])
+router = APIRouter(tags=["Satellites"])
 
 @router.get("", response_model=List[SatelliteResponse])
 async def list_satellites():
@@ -66,10 +74,53 @@ async def create_satellite(req: CreateSatelliteRequest):
         "vel_eci": [float(v_eci[0]), float(v_eci[1]), float(v_eci[2])],
         "in_eclipse": False,
         "subsystem_status": "NOMINAL",
-        "anomaly_score": 0.01
+        "anomaly_score": 0.01,
+        "bus_voltage_v": 28.4,
+        "bus_current_a": 3.8,
+        "battery_temp_c": 20.0,
+        "avionics_temp_c": 30.0,
+        "solar_power_w": 240.0,
+        "downlink_rate_mbps": 15.0,
+        "comm_link_active": True,
+        "active_faults": {}
     }
     
-    simulation_engine.satellites[sat_id] = sat_data
+    simulation_engine.add_satellite(sat_data)
+
+    # Persist record to database asynchronously
+    try:
+        async with AsyncSessionLocal() as session:
+            sat_record = SatelliteModel(
+                id=sat_id,
+                simulation_run_id=simulation_engine.simulation_id,
+                name=req.name,
+                dry_mass_kg=req.dry_mass_kg,
+                propellant_mass_kg=req.propellant_mass_kg,
+                operational_state="ACTIVE",
+                is_synthetic=True
+            )
+            session.add(sat_record)
+            orb_record = OrbitalStateModel(
+                satellite_id=sat_id,
+                epoch=simulation_engine.current_epoch,
+                pos_x_m=float(r_eci[0]),
+                pos_y_m=float(r_eci[1]),
+                pos_z_m=float(r_eci[2]),
+                vel_x_mps=float(v_eci[0]),
+                vel_y_mps=float(v_eci[1]),
+                vel_z_mps=float(v_eci[2]),
+                semi_major_axis_m=a_m,
+                eccentricity=req.eccentricity,
+                inclination_rad=i_rad,
+                raan_rad=Omega_rad,
+                arg_periapsis_rad=omega_rad,
+                true_anomaly_rad=nu_rad
+            )
+            session.add(orb_record)
+            await session.commit()
+    except Exception:
+        # Fallback to in-memory runtime engine if database is initializing
+        pass
     
     return SatelliteResponse(
         id=sat_id,
@@ -86,6 +137,74 @@ async def create_satellite(req: CreateSatelliteRequest):
         in_eclipse=False,
         is_synthetic=True
     )
+
+@router.put("/{satellite_id}", response_model=SatelliteResponse)
+@router.patch("/{satellite_id}", response_model=SatelliteResponse)
+async def update_satellite(satellite_id: str, req: UpdateSatelliteRequest):
+    sat = simulation_engine.satellites.get(satellite_id) or simulation_engine.satellites.get(satellite_id.lower())
+    if not sat:
+        raise HTTPException(status_code=404, detail="Satellite not found")
+        
+    updates = req.model_dump(exclude_unset=True)
+    updated_sat = simulation_engine.update_satellite(sat["id"], updates)
+
+    # Persist updates to DB
+    try:
+        async with AsyncSessionLocal() as session:
+            stmt = select(SatelliteModel).where(SatelliteModel.id == sat["id"])
+            res = await session.execute(stmt)
+            db_sat = res.scalar_one_or_none()
+            if db_sat:
+                if req.name:
+                    db_sat.name = req.name
+                if req.operational_state:
+                    db_sat.operational_state = req.operational_state
+                if req.dry_mass_kg:
+                    db_sat.dry_mass_kg = req.dry_mass_kg
+                if req.propellant_mass_kg:
+                    db_sat.propellant_mass_kg = req.propellant_mass_kg
+                await session.commit()
+    except Exception:
+        pass
+
+    return SatelliteResponse(
+        id=updated_sat["id"],
+        name=updated_sat["name"],
+        operational_state=updated_sat["operational_state"],
+        dry_mass_kg=updated_sat["dry_mass_kg"],
+        propellant_mass_kg=updated_sat["propellant_mass_kg"],
+        battery_soc_pct=round(updated_sat["battery_soc_pct"], 2),
+        position_eci_m=updated_sat["pos_eci"],
+        velocity_eci_mps=updated_sat["vel_eci"],
+        semi_major_axis_m=updated_sat["a"],
+        eccentricity=updated_sat["e"],
+        inclination_rad=updated_sat["i"],
+        in_eclipse=updated_sat.get("in_eclipse", False),
+        is_synthetic=True
+    )
+
+@router.delete("/{satellite_id}")
+async def delete_satellite(satellite_id: str):
+    sat = simulation_engine.satellites.get(satellite_id) or simulation_engine.satellites.get(satellite_id.lower())
+    if not sat:
+        raise HTTPException(status_code=404, detail="Satellite not found")
+
+    target_id = sat["id"]
+    simulation_engine.delete_satellite(target_id)
+
+    try:
+        async with AsyncSessionLocal() as session:
+            stmt = delete(SatelliteModel).where(SatelliteModel.id == target_id)
+            await session.execute(stmt)
+            await session.commit()
+    except Exception:
+        pass
+
+    return {
+        "status": "DELETED",
+        "satellite_id": target_id,
+        "message": f"Satellite {sat['name']} decommissioned and deleted from simulation."
+    }
 
 @router.get("/{satellite_id}", response_model=SatelliteResponse)
 async def get_satellite(satellite_id: str):

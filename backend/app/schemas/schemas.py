@@ -155,6 +155,21 @@ class SatelliteTickSnapshot(BaseModel):
     in_eclipse: bool
     subsystem_status: str
     anomaly_score: float = 0.0
+    bus_voltage_v: float = 28.0
+    bus_current_a: float = 3.5
+    battery_temp_c: float = 20.0
+    avionics_temp_c: float = 30.0
+    solar_power_w: float = 240.0
+    downlink_rate_mbps: float = 12.5
+    comm_link_active: bool = True
+
+class SimulationEventMessage(BaseModel):
+    id: str
+    epoch: datetime
+    event_type: str
+    satellite_id: Optional[str] = None
+    title: str
+    severity: str = "INFO"
 
 class TickSnapshotMessage(BaseModel):
     type: str = "SIMULATION_TICK_SNAPSHOT"
@@ -164,4 +179,82 @@ class TickSnapshotMessage(BaseModel):
     time_acceleration: float
     satellites: List[SatelliteTickSnapshot]
     active_alerts: List[Dict[str, Any]] = []
+    recent_events: List[Dict[str, Any]] = []
+    debris: List[Dict[str, Any]] = []
+
+# Update Satellite Request
+class UpdateSatelliteRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    operational_state: Optional[str] = Field(None, description="ACTIVE, SAFE_HOLD, STANDBY, DECOMMISSIONED")
+    dry_mass_kg: Optional[float] = Field(None, gt=0.0)
+    propellant_mass_kg: Optional[float] = Field(None, ge=0.0)
+
+# Fault Injection Schemas
+class FaultInjectRequest(BaseModel):
+    satellite_id: str
+    fault_type: str = Field(description="SOLAR_ARRAY_DROP, BATTERY_DEGRADATION, THERMAL_RUNAWAY, VOLTAGE_SPIKE, COMM_FAILURE")
+    severity: float = Field(default=1.0, ge=0.1, le=5.0)
+
+class FaultRecordResponse(BaseModel):
+    id: str
+    satellite_id: str
+    fault_type: str
+    severity: float
+    injected_epoch: datetime
+    resolved_epoch: Optional[datetime] = None
+    status: str
+    details: Optional[Dict[str, Any]] = None
+
+# Alert Schemas
+class AlertItemResponse(BaseModel):
+    id: str
+    alert_type: str
+    severity: str
+    title: str
+    message: str
+    source_entity_id: Optional[str] = None
+    epoch: datetime
+    is_acknowledged: bool
+    acknowledged_at: Optional[datetime] = None
+
+# Report Schemas
+class GenerateReportRequest(BaseModel):
+    report_type: str = Field(default="MISSION_SUMMARY", description="MISSION_SUMMARY, TELEMETRY_LOG, CONJUNCTION_ASSESSMENT, FLEET_STATUS")
+    title: str = Field(default="OrbitOS Operational Mission Report")
+    format: str = Field(default="MARKDOWN", description="MARKDOWN, JSON")
+    satellite_id: Optional[str] = None
+
+class ReportResponse(BaseModel):
+    id: str
+    report_type: str
+    title: str
+    generated_epoch: datetime
+    format: str
+    content: str
+    file_path: Optional[str] = None
+
+# Imagery Schemas
+class ImageryItemResponse(BaseModel):
+    id: str
+    satellite_id: str
+    mission_id: Optional[str] = None
+    capture_epoch: datetime
+    resolution_m: float
+    fov_deg: float
+    spectral_band: str
+    target_name: str
+    target_lat: float
+    target_lon: float
+    image_url: str
+    cloud_cover_pct: float
+    is_synthetic: bool
+    metadata_json: Optional[Dict[str, Any]] = None
+
+class GenerateImageryRequest(BaseModel):
+    satellite_id: str
+    target_name: str = "Sahara Surface Target"
+    target_lat: float = 24.5
+    target_lon: float = 12.2
+    spectral_band: str = "RGB"
+    resolution_m: float = 1.5
 
