@@ -129,6 +129,20 @@ Run the complete multi-container stack with one command:
 docker compose up --build
 ```
 
+---
+
+### Method C: Deploy on Vercel (1-Click Cloud Hosting)
+
+Deploy the 3D OrbitOS Mission Control Cockpit to Vercel's global Edge CDN:
+
+1. Import the repository on [vercel.com/new](https://vercel.com/new).
+2. Vercel automatically detects root `vercel.json` and builds `frontend/dist`.
+3. Or deploy via CLI:
+   ```bash
+   npx vercel --prod
+   ```
+4. See **[DEPLOY_VERCEL.md](DEPLOY_VERCEL.md)** for connecting external backends and advanced settings.
+
 To run in detached background mode:
 ```bash
 docker compose up -d

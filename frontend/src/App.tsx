@@ -20,16 +20,18 @@ import { FaultInjectionView } from './features/faults/FaultInjectionView';
 import { AlertsView } from './features/alerts/AlertsView';
 import { ReportsView } from './features/reports/ReportsView';
 import { SettingsView } from './features/settings/SettingsView';
+import { ScenarioControlWidget } from './components/dashboard/ScenarioControlWidget';
 
 export const App: React.FC = () => {
-  const { setSnapshot, setWsConnected } = useOrbitStore();
+  const { setSnapshot, setWsConnected, clockState, isWsConnected } = useOrbitStore();
   const [activePage, setActivePage] = useState<NavPage>('dashboard');
   const [is2D, setIs2D] = useState(false);
 
   useEffect(() => {
+    const envWsUrl = import.meta.env.VITE_WS_URL;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host || 'localhost:3000';
-    const wsUrl = `${protocol}//${host}/ws/v1/simulation`;
+    const wsUrl = envWsUrl || `${protocol}//${host}/ws/v1/simulation`;
 
     let isDisposed = false;
     let ws: WebSocket | null = null;
@@ -92,6 +94,41 @@ export const App: React.FC = () => {
     };
   }, [setSnapshot, setWsConnected]);
 
+  // Standalone offline simulation ticker fallback for Vercel/demo mode
+  useEffect(() => {
+    if (isWsConnected || clockState !== 'RUNNING') return;
+
+    const interval = setInterval(() => {
+      const current = useOrbitStore.getState();
+      if (current.isWsConnected || current.clockState !== 'RUNNING') return;
+
+      const epochDate = new Date(current.simulationEpoch);
+      epochDate.setSeconds(epochDate.getSeconds() + 1);
+
+      // Smooth orbital rotation step in ECI
+      const updatedSats: Record<string, any> = {};
+      const angularStep = 0.015;
+      const cosA = Math.cos(angularStep);
+      const sinA = Math.sin(angularStep);
+
+      for (const [id, sat] of Object.entries(current.satellites)) {
+        const [x, y, z] = sat.position_eci_m;
+        updatedSats[id] = {
+          ...sat,
+          position_eci_m: [x * cosA - y * sinA, x * sinA + y * cosA, z],
+        };
+      }
+
+      useOrbitStore.setState({
+        tickNumber: current.tickNumber + 1,
+        simulationEpoch: epochDate.toISOString(),
+        satellites: updatedSats,
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isWsConnected, clockState]);
+
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#050B16] text-[#E8F0FA] font-sans">
       {/* Top Mission Control Bar */}
@@ -129,6 +166,11 @@ export const App: React.FC = () => {
                     <Eye className="w-3.5 h-3.5 text-[#00D5FF]" />
                     <span>{is2D ? 'ENABLE 3D' : '2D VIEW'}</span>
                   </button>
+                </div>
+
+                {/* Floating Automated Flight Scenarios Widget (Minimizable / Non-Obstructive) */}
+                <div className="absolute bottom-2 left-4 right-4 z-10 max-w-4xl mx-auto">
+                  <ScenarioControlWidget />
                 </div>
               </section>
 

@@ -1,6 +1,6 @@
 import React, { Suspense, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Stars, PerspectiveCamera } from '@react-three/drei';
+import { OrbitControls, Stars, PerspectiveCamera, Html } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { EarthGlobe } from './EarthGlobe';
 import { SatelliteMesh } from './SatelliteMesh';
@@ -19,7 +19,8 @@ export const OrbitalCanvas: React.FC = () => {
     showTracks, 
     setShowTracks, 
     showGroundStations, 
-    setShowGroundStations 
+    setShowGroundStations,
+    scenarioState
   } = useOrbitStore();
 
   const controlsRef = useRef<OrbitControlsImpl>(null);
@@ -35,7 +36,7 @@ export const OrbitalCanvas: React.FC = () => {
     <div className="w-full h-full relative bg-[#050B16] select-none">
       {/* 3D WebGL Canvas */}
       <Canvas>
-        <PerspectiveCamera makeDefault position={[0, 12, 18]} fov={45} />
+        <PerspectiveCamera makeDefault position={[0, 10, 20]} fov={42} />
         
         {/* Camera Orbit Controls */}
         <OrbitControls 
@@ -46,6 +47,7 @@ export const OrbitalCanvas: React.FC = () => {
           minDistance={7.2}
           maxDistance={50.0}
           dampingFactor={0.05}
+          target={[0, 1.0, 0]}
         />
 
         {/* Ambient & Sun Directional Lighting */}
@@ -86,6 +88,28 @@ export const OrbitalCanvas: React.FC = () => {
           {satelliteList.map((sat) => (
             <SatelliteMesh key={sat.satellite_id} satellite={sat} />
           ))}
+
+          {/* Visual Collision Strike Marker & Blast Halo */}
+          {scenarioState?.collision_detected && scenarioState.collision_point && (
+            <group position={scenarioState.collision_point.map((v: number) => v / 1000000.0) as [number, number, number]}>
+              {/* Outer Shockwave Sphere */}
+              <mesh>
+                <sphereGeometry args={[0.65, 32, 32]} />
+                <meshBasicMaterial color="#FF4D5E" transparent opacity={0.65} wireframe />
+              </mesh>
+              {/* Glowing Impact Core */}
+              <mesh>
+                <sphereGeometry args={[0.3, 24, 24]} />
+                <meshStandardMaterial color="#FFB547" emissive="#FF4D5E" emissiveIntensity={2.0} />
+              </mesh>
+              {/* Proximity Warning Tag */}
+              <Html distanceFactor={15} position={[0, 0.5, 0]} center>
+                <div className="px-2.5 py-1 rounded bg-[#FF4D5E] text-[#050B16] font-mono font-black text-xs shadow-2xl animate-bounce whitespace-nowrap border-2 border-white">
+                  💥 {scenarioState.scenario_id === 'sat_collision' ? 'SATELLITE COLLISION (TEST FAILED)' : 'DEBRIS IMPACT (500.8 km)'}
+                </div>
+              </Html>
+            </group>
+          )}
         </Suspense>
       </Canvas>
 

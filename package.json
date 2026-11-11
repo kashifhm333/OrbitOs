@@ -1,0 +1,12 @@
+{
+  "name": "orbitos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OrbitOS — Autonomous Space Mission Management Simulator",
+  "scripts": {
+    "build": "npm run build --prefix frontend",
+    "dev": "npm run dev --prefix frontend",
+    "preview": "npm run preview --prefix frontend"
+  }
+}
+

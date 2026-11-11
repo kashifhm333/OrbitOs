@@ -60,6 +60,20 @@ export interface ConjunctionAlert {
   epoch: string;
 }
 
+export interface ScenarioState {
+  scenario_id: 'nominal' | 'debris_strike' | 'sat_collision' | string;
+  scenario_name: string;
+  status: 'NOMINAL' | 'CONVERGING' | 'COLLISION_IMPACT' | 'TEST_FAILED' | string;
+  collision_detected: boolean;
+  message: string;
+  closest_distance_m?: number;
+  impact_target?: string | null;
+  impact_altitude_km?: number;
+  impact_inclination_deg?: number;
+  impact_raan_deg?: number;
+  collision_point?: [number, number, number] | null;
+}
+
 export interface TickSnapshotMessage {
   type: string;
   simulation_epoch: string;
@@ -70,6 +84,7 @@ export interface TickSnapshotMessage {
   active_alerts: ConjunctionAlert[];
   recent_events?: SimulationEvent[];
   debris?: any[];
+  scenario_state?: ScenarioState;
 }
 
 export interface GroundStationItem {

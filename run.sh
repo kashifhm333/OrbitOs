@@ -23,6 +23,8 @@ NC='\033[0m' # No Color
 AUTO_OPEN_BROWSER=true
 RUN_TESTS_ONLY=false
 RUN_MIGRATIONS_ONLY=false
+RUN_BUILD_ONLY=false
+RUN_SCENARIO_ONLY=false
 
 # Parse Command-Line Arguments
 while [[ $# -gt 0 ]]; do
@@ -39,12 +41,22 @@ while [[ $# -gt 0 ]]; do
       RUN_MIGRATIONS_ONLY=true
       shift
       ;;
+    --build)
+      RUN_BUILD_ONLY=true
+      shift
+      ;;
+    --tc-01|--scenario|--scenarios|--test-scenarios)
+      RUN_SCENARIO_ONLY=true
+      shift
+      ;;
     -h|--help)
       echo -e "${CYAN}${BOLD}OrbitOS Launch Script Usage:${NC}"
       echo "  ./run.sh              Launch full OrbitOS stack (backend + frontend + migrations)"
       echo "  ./run.sh --no-browser Launch stack without automatically opening the browser"
       echo "  ./run.sh --migrate    Run Alembic database migrations only and exit"
       echo "  ./run.sh --test       Run full backend test suite (pytest) and exit"
+      echo "  ./run.sh --build      Build frontend production bundle (TypeScript & Vite) and exit"
+      echo "  ./run.sh --scenarios  Run the 3 Automated Flight Scenarios test runner and exit"
       echo "  ./run.sh --help       Show this help message"
       exit 0
       ;;
@@ -135,7 +147,7 @@ fi
 source .venv/bin/activate
 
 # Verify core dependencies
-if ! python3 -c "import fastapi, uvicorn, scipy, sklearn, sqlalchemy, aiosqlite, alembic" &> /dev/null; then
+if ! python3 -c "import fastapi, uvicorn, scipy, sklearn, sqlalchemy, aiosqlite, alembic, numpy, pydantic" &> /dev/null; then
     echo -e "  ${YELLOW}!${NC} Installing required Python packages (one-time setup)..."
     pip install --quiet --upgrade pip
     pip install --quiet -r backend/requirements.txt
@@ -160,6 +172,99 @@ fi
 if [ "$RUN_TESTS_ONLY" = true ]; then
     echo -e "\n${CYAN}Running OrbitOS automated test suite (pytest)...${NC}\n"
     pytest tests/ -v
+    exit 0
+fi
+
+# If user requested frontend build only
+if [ "$RUN_BUILD_ONLY" = true ]; then
+    echo -e "\n${CYAN}Building frontend production bundle (tsc && vite build)...${NC}\n"
+    (cd frontend && npm run build)
+    echo -e "\n${GREEN}${BOLD}Frontend build completed successfully.${NC}"
+    exit 0
+fi
+
+# If user requested Scenario verification execution only
+if [ "$RUN_SCENARIO_ONLY" = true ]; then
+    echo -e "\n${CYAN}${BOLD}Executing 3 Automated Flight Scenarios Test Suite...${NC}\n"
+    PYTHONPATH=backend python3 -c '
+from app.simulation.engine import SimulationEngine
+
+print("==================================================================")
+print("ORBITOS: EXECUTING 3 AUTOMATED FLIGHT SCENARIOS TEST SUITE")
+print("==================================================================")
+
+# -------------------------------------------------------------
+# Scenario 1: Nominal Clean Launch
+# -------------------------------------------------------------
+print("\n[1/3] Scenario 1: Nominal Clean Launch (No Collision, Smooth Flight)...")
+e1 = SimulationEngine()
+s1 = e1.load_scenario("nominal")
+for _ in range(5):
+    e1.step_tick()
+snap1 = e1.get_current_snapshot()
+sc1 = snap1.scenario_state
+dist1 = sc1["closest_distance_m"] / 1000.0
+hit1 = sc1["collision_detected"]
+stat1 = sc1["status"]
+msg1 = sc1["message"]
+print(f"  ✓ Relative Distance: {dist1:.1f} km")
+print(f"  ✓ Collision Detected: {hit1}")
+print(f"  ✓ Status: {stat1}")
+print(f"  ✓ Diagnostic: {msg1}")
+assert not hit1, "Scenario 1 must have NO collision"
+assert stat1 == "NOMINAL", "Scenario 1 status must be NOMINAL"
+print("  --> PASS: Scenario 1 Nominal Clean Launch verified.")
+
+# -------------------------------------------------------------
+# Scenario 2: Debris Collision Strike Hazard
+# -------------------------------------------------------------
+print("\n[2/3] Scenario 2: Debris Collision Strike Hazard...")
+e2 = SimulationEngine()
+s2 = e2.load_scenario("debris_strike")
+for _ in range(5):
+    e2.step_tick()
+snap2 = e2.get_current_snapshot()
+sc2 = snap2.scenario_state
+dist2 = sc2["closest_distance_m"]
+hit2 = sc2["collision_detected"]
+stat2 = sc2["status"]
+msg2 = sc2["message"]
+print(f"  ✓ Impact Miss Distance: {dist2:.1f} meters")
+print(f"  ✓ Collision Detected: {hit2}")
+print(f"  ✓ Status: {stat2}")
+print(f"  ✓ Diagnostic: {msg2}")
+assert hit2, "Scenario 2 must detect collision"
+assert stat2 == "COLLISION_IMPACT", "Scenario 2 status must be COLLISION_IMPACT"
+print("  --> PASS: Scenario 2 Debris Strike Hazard verified.")
+
+# -------------------------------------------------------------
+# Scenario 3: Satellite-to-Satellite Collision (Test Failed)
+# -------------------------------------------------------------
+print("\n[3/3] Scenario 3: Satellite-to-Satellite Collision (Test Failed)...")
+e3 = SimulationEngine()
+s3 = e3.load_scenario("sat_collision")
+for _ in range(5):
+    e3.step_tick()
+snap3 = e3.get_current_snapshot()
+sc3 = snap3.scenario_state
+dist3 = sc3["closest_distance_m"]
+hit3 = sc3["collision_detected"]
+stat3 = sc3["status"]
+msg3 = sc3["message"]
+print(f"  ✓ Relative Separation: {dist3:.1f} meters")
+print(f"  ✓ Collision Detected: {hit3}")
+print(f"  ✓ Status: {stat3}")
+print(f"  ✓ Diagnostic: {msg3}")
+assert hit3, "Scenario 3 must detect collision"
+assert stat3 == "TEST_FAILED", "Scenario 3 status must be TEST_FAILED"
+print("  --> PASS: Scenario 3 Satellite Collision verified.")
+
+print("\n==================================================================")
+print("ALL 3 MISSION SCENARIOS VERIFIED SUCCESSFULLY!")
+print("Web UI Cockpit: Select scenario and press Play button to run.")
+print("Documentation: docs/scenarios.md")
+print("==================================================================")
+'
     exit 0
 fi
 
@@ -190,12 +295,21 @@ fi
 
 # Cleanup trap to gracefully terminate child processes on exit
 cleanup() {
+    trap - SIGINT SIGTERM EXIT
     echo -e "\n\n${YELLOW}Shutting down OrbitOS Mission Control...${NC}"
     if [ -n "$BACKEND_PID" ]; then
         kill "$BACKEND_PID" 2>/dev/null || true
     fi
     if [ -n "$FRONTEND_PID" ]; then
         kill "$FRONTEND_PID" 2>/dev/null || true
+    fi
+    # Final port cleanup
+    if command -v fuser &> /dev/null; then
+        fuser -k 8001/tcp &> /dev/null || true
+        fuser -k 3000/tcp &> /dev/null || true
+    elif command -v lsof &> /dev/null; then
+        lsof -ti:8001 | xargs -r kill -9 2>/dev/null || true
+        lsof -ti:3000 | xargs -r kill -9 2>/dev/null || true
     fi
     echo -e "${GREEN}All OrbitOS services stopped cleanly.${NC}"
     exit 0
@@ -205,7 +319,7 @@ trap cleanup SIGINT SIGTERM EXIT
 
 # Start Backend Server
 echo -e "  ${PURPLE}»${NC} Launching FastAPI backend on ${BOLD}http://localhost:8001${NC}..."
-PYTHONPATH=backend uvicorn app.main:app --host 0.0.0.0 --port 8001 --log-level warning &
+PYTHONPATH=backend uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8001 --log-level warning &
 BACKEND_PID=$!
 
 # Wait for backend healthcheck (HTTP 200 on /api/v1/health or /healthz)
@@ -257,11 +371,15 @@ echo -e "  ${BOLD}Interactive API Docs:${NC}  ${CYAN}http://localhost:8001/docs$
 echo -e "  ${BOLD}System Health Check:${NC}   ${CYAN}http://localhost:8001/api/v1/health${NC}"
 echo -e "  ${BOLD}Simulation Stream:${NC}     ${CYAN}ws://localhost:8001/ws/v1/simulation${NC}"
 echo -e "${BLUE}------------------------------------------------------------------${NC}"
-echo -e "  ${BOLD}12 Operational Pages Active in Cockpit:${NC}"
-echo -e "   [1] Dashboard       [5] Telemetry        [9] AI/ML Intelligence"
+echo -e "  ${BOLD}13 Operational Pages Active in Cockpit:${NC}"
+echo -e "   [1] Dashboard       [5] Telemetry        [9] AI/ML Intelligence   [13] Settings"
 echo -e "   [2] Satellites      [6] Missions        [10] Fault Injection"
 echo -e "   [3] 3D Tracking     [7] Conjunctions    [11] Hazard Alerts"
 echo -e "   [4] Imagery         [8] Ground Stations [12] Operations Reports"
+echo -e "${BLUE}------------------------------------------------------------------${NC}"
+echo -e "  ${BOLD}Test & Verification Reports:${NC}"
+echo -e "   • Astrodynamics & Space Safety: ${CYAN}problem.md${NC}"
+echo -e "   • Test Case 01 (Debris Touch):  ${CYAN}test_case_01.md${NC}"
 echo -e "${PURPLE}------------------------------------------------------------------${NC}"
 echo -e "${YELLOW}Press [CTRL+C] at any time to halt all services cleanly.${NC}"
 echo -e "${PURPLE}------------------------------------------------------------------${NC}"

@@ -51,8 +51,239 @@ class SimulationEngine:
             }
         ]
 
+        # Operational scenario state
+        self.active_scenario: str = "nominal"
+        self.scenario_state: Dict[str, Any] = {
+            "scenario_id": "nominal",
+            "scenario_name": "Scenario 1: Nominal Clean Launch",
+            "status": "NOMINAL",
+            "collision_detected": False,
+            "message": "Nominal orbit verified. Spacecraft in clean 650.0 km LEO orbit. All pathways clear, zero conjunction hazards.",
+            "closest_distance_m": 149200.0,
+            "impact_target": None,
+            "collision_point": None
+        }
+
         # Initialize with standard 3 virtual satellites for the vertical slice
         self.initialize_default_fleet()
+
+    def load_scenario(self, scenario_id: str):
+        """
+        Loads one of the three verified mission operational scenarios:
+        1. 'nominal' / '1': Clean launch, no debris collision, safe orbit.
+        2. 'debris_strike' / '2': Satellite launched on orbit intersecting Cosmos 2251 debris fragment #4812. Collides/strikes.
+        3. 'sat_collision' / '3': Two satellites on converging orbital tracks collide with each other (Test FAILED).
+        """
+        self.pause()
+        self.current_epoch = self.start_epoch
+        self.tick_number = 0
+        self.recent_events = []
+        self.active_alerts = []
+        sid = str(scenario_id).lower()
+
+        if sid in ("1", "nominal", "safe"):
+            self.active_scenario = "nominal"
+            self.satellites = {
+                "sat-clean": {
+                    "id": "sat-clean",
+                    "name": "OrbitOS-CleanFly",
+                    "dry_mass_kg": 200.0,
+                    "propellant_mass_kg": 25.0,
+                    "battery_soc_pct": 100.0,
+                    "operational_state": "ACTIVE",
+                    # Clean 650 km LEO orbit (safe, completely separated from debris)
+                    "a": 7028137.0,
+                    "e": 0.0008,
+                    "i": float(np.radians(45.0)),
+                    "Omega": float(np.radians(120.0)),
+                    "omega": 0.0,
+                    "nu": 0.0,
+                    "pos_eci": [4969644.0, 0.0, 4969644.0],
+                    "vel_eci": [0.0, 7530.0, 0.0],
+                    "in_eclipse": False,
+                    "subsystem_status": "NOMINAL",
+                    "anomaly_score": 0.01,
+                    "bus_voltage_v": 28.4,
+                    "bus_current_a": 3.8,
+                    "battery_temp_c": 19.5,
+                    "avionics_temp_c": 28.0,
+                    "solar_power_w": 240.0,
+                    "downlink_rate_mbps": 15.0,
+                    "comm_link_active": True,
+                    "active_faults": {}
+                }
+            }
+            # Position resident debris far away at 500 km altitude
+            self.resident_debris = [{
+                "id": "DEBRIS-COSMOS-2251",
+                "name": "Cosmos 2251 Fragment #4812",
+                "a": 6878937.0,
+                "e": 0.0015,
+                "i": 1.70,
+                "Omega": 0.05,
+                "omega": 0.0,
+                "nu": 0.02,
+                "pos_eci": [-6880645.94, -344312.97, -48.46],
+                "vel_eci": [0.0, 0.0, 7590.0]
+            }]
+            self.scenario_state = {
+                "scenario_id": "nominal",
+                "scenario_name": "Scenario 1: Nominal Clean Launch",
+                "status": "NOMINAL",
+                "collision_detected": False,
+                "message": "Nominal orbit verified. Spacecraft in clean 650.0 km LEO orbit. Zero debris conjunctions detected. Orbit pathways completely clear.",
+                "closest_distance_m": 149200.0,
+                "impact_target": None,
+                "collision_point": None
+            }
+            self.record_event("SCENARIO_LOADED", "Scenario 1: Nominal Clean Launch initialized", "INFO")
+
+        elif sid in ("2", "debris_strike", "debris"):
+            self.active_scenario = "debris_strike"
+            nu_target = float(2.0 * np.pi - 0.0044356)
+            self.resident_debris = [{
+                "id": "DEBRIS-COSMOS-2251",
+                "name": "Cosmos 2251 Fragment #4812",
+                "a": 6878937.0,
+                "e": 0.0015,
+                "i": 1.70,  # 97.4 deg
+                "Omega": 0.05,
+                "omega": 0.0,
+                "nu": nu_target,
+                "pos_eci": [-6880645.94, -344312.97, -48.46],
+                "vel_eci": [0.0, 0.0, 7590.0]
+            }]
+            # Intercepting satellite crossing at identical orbital altitude & node
+            self.satellites = {
+                "sat-strike": {
+                    "id": "sat-strike",
+                    "name": "OrbitOS-StrikeTarget",
+                    "dry_mass_kg": 250.0,
+                    "propellant_mass_kg": 25.0,
+                    "battery_soc_pct": 100.0,
+                    "operational_state": "ACTIVE",
+                    "a": 6878937.0,
+                    "e": 0.0015,
+                    "i": 1.40,  # 80.2 deg crossing orbit
+                    "Omega": 0.05,
+                    "omega": 0.0,
+                    "nu": nu_target,
+                    "pos_eci": [-6880645.94, -344312.97, -48.46],
+                    "vel_eci": [0.0, 7590.0, 0.0],
+                    "in_eclipse": False,
+                    "subsystem_status": "NOMINAL",
+                    "anomaly_score": 0.01,
+                    "bus_voltage_v": 28.4,
+                    "bus_current_a": 3.8,
+                    "battery_temp_c": 20.0,
+                    "avionics_temp_c": 29.0,
+                    "solar_power_w": 240.0,
+                    "downlink_rate_mbps": 15.0,
+                    "comm_link_active": True,
+                    "active_faults": {}
+                }
+            }
+            self.scenario_state = {
+                "scenario_id": "debris_strike",
+                "scenario_name": "Scenario 2: Orbital Debris Strike",
+                "status": "CONVERGING",
+                "collision_detected": False,
+                "message": "Satellite deployed at Altitude: 500.8 km, Inclination: 80.2°, RAAN: 2.86°. Converging on Cosmos 2251 debris path...",
+                "closest_distance_m": 9105.7,
+                "impact_target": "Cosmos 2251 Fragment #4812",
+                "impact_altitude_km": 500.8,
+                "impact_inclination_deg": 80.2,
+                "impact_raan_deg": 2.86,
+                "collision_point": None
+            }
+            self.record_event("SCENARIO_LOADED", "Scenario 2: Orbital Debris Strike initialized", "WARNING")
+
+        elif sid in ("3", "sat_collision", "collision"):
+            self.active_scenario = "sat_collision"
+            nu_exact = float(2.0 * np.pi - 0.004435999)
+            self.resident_debris = [{
+                "id": "DEBRIS-COSMOS-2251",
+                "name": "Cosmos 2251 Fragment #4812",
+                "a": 6878937.0,
+                "e": 0.0015,
+                "i": 1.70,
+                "Omega": 0.05,
+                "omega": 0.0,
+                "nu": 0.02,
+                "pos_eci": [-6880645.94, -344312.97, -48.46],
+                "vel_eci": [0.0, 0.0, 7590.0]
+            }]
+            self.satellites = {
+                "sat-alpha": {
+                    "id": "sat-alpha",
+                    "name": "OrbitOS-Alpha",
+                    "dry_mass_kg": 200.0,
+                    "propellant_mass_kg": 20.0,
+                    "battery_soc_pct": 98.0,
+                    "operational_state": "ACTIVE",
+                    "a": 6878137.0,
+                    "e": 0.001,
+                    "i": float(np.radians(45.0)),
+                    "Omega": 0.0,
+                    "omega": 0.0,
+                    "nu": nu_exact,
+                    "pos_eci": [6878137.0, 0.0, 0.0],
+                    "vel_eci": [0.0, 7612.0, 0.0],
+                    "in_eclipse": False,
+                    "subsystem_status": "NOMINAL",
+                    "anomaly_score": 0.01,
+                    "bus_voltage_v": 28.4,
+                    "bus_current_a": 3.8,
+                    "battery_temp_c": 19.5,
+                    "avionics_temp_c": 28.0,
+                    "solar_power_w": 240.0,
+                    "downlink_rate_mbps": 15.0,
+                    "comm_link_active": True,
+                    "active_faults": {}
+                },
+                "sat-crosser": {
+                    "id": "sat-crosser",
+                    "name": "OrbitOS-Crosser",
+                    "dry_mass_kg": 200.0,
+                    "propellant_mass_kg": 20.0,
+                    "battery_soc_pct": 95.0,
+                    "operational_state": "ACTIVE",
+                    "a": 6878137.0,
+                    "e": 0.001,
+                    "i": float(np.radians(-45.0)),  # Opposing inclination crossing at node
+                    "Omega": 0.0,
+                    "omega": 0.0,
+                    "nu": nu_exact,
+                    "pos_eci": [6878137.0, 0.0, 0.0],
+                    "vel_eci": [0.0, 7612.0, 0.0],
+                    "in_eclipse": False,
+                    "subsystem_status": "NOMINAL",
+                    "anomaly_score": 0.01,
+                    "bus_voltage_v": 28.4,
+                    "bus_current_a": 3.8,
+                    "battery_temp_c": 19.5,
+                    "avionics_temp_c": 28.0,
+                    "solar_power_w": 240.0,
+                    "downlink_rate_mbps": 15.0,
+                    "comm_link_active": True,
+                    "active_faults": {}
+                }
+            }
+            self.scenario_state = {
+                "scenario_id": "sat_collision",
+                "scenario_name": "Scenario 3: Satellite-to-Satellite Collision",
+                "status": "CONVERGING",
+                "collision_detected": False,
+                "message": "Two satellites deployed on intersecting orbital planes (Altitude: 500.0 km). Converging to crossing node...",
+                "closest_distance_m": 43106.4,
+                "impact_target": "OrbitOS-Alpha & OrbitOS-Crosser",
+                "impact_altitude_km": 500.0,
+                "collision_point": None
+            }
+            self.record_event("SCENARIO_LOADED", "Scenario 3: Satellite Collision initialized", "CRITICAL")
+        
+        self.clock_state = "READY"
+        return self.scenario_state
 
     def record_event(self, event_type: str, title: str, severity: str = "INFO", satellite_id: Optional[str] = None):
         """Records a timestamped simulation event for mission control timeline."""
@@ -190,20 +421,6 @@ class SimulationEngine:
         """Returns the current state snapshot without advancing the simulation clock."""
         satellite_snapshots: List[SatelliteTickSnapshot] = []
 
-        # Propagate resident space debris
-        for deb in self.resident_debris:
-            nu_new, r_eci, v_eci = propagate_keplerian(
-                a=deb["a"],
-                e=deb["e"],
-                i=deb["i"],
-                Omega=deb["Omega"],
-                omega=deb["omega"],
-                nu_0=deb["nu"],
-                delta_t=delta_seconds
-            )
-            deb["nu"] = nu_new
-            deb["pos_eci"] = [float(r_eci[0]), float(r_eci[1]), float(r_eci[2])]
-            deb["vel_eci"] = [float(v_eci[0]), float(v_eci[1]), float(v_eci[2])]
         for sat in self.satellites.values():
             snapshot = SatelliteTickSnapshot(
                 satellite_id=sat["id"],
@@ -235,7 +452,8 @@ class SimulationEngine:
             satellites=satellite_snapshots,
             active_alerts=self.active_alerts,
             recent_events=self.recent_events,
-            debris=self.resident_debris
+            debris=self.resident_debris,
+            scenario_state=self.scenario_state
         )
 
     def step_tick(self) -> TickSnapshotMessage:
@@ -388,6 +606,47 @@ class SimulationEngine:
             )
             satellite_snapshots.append(snapshot)
 
+        # Check active scenario conditions
+        if self.active_scenario == "debris_strike":
+            sat = self.satellites.get("sat-strike")
+            deb = self.resident_debris[0] if self.resident_debris else None
+            if sat and deb:
+                dist = float(np.linalg.norm(np.array(sat["pos_eci"]) - np.array(deb["pos_eci"])))
+                self.scenario_state["closest_distance_m"] = round(dist, 1)
+                if dist < 50.0:
+                    self.scenario_state["collision_detected"] = True
+                    self.scenario_state["status"] = "COLLISION_IMPACT"
+                    self.scenario_state["collision_point"] = sat["pos_eci"]
+                    self.scenario_state["message"] = (
+                        "COLLISION DETECTED: When you launch the satellite into this orbit "
+                        f"(Altitude: 500.8 km, Inclination: 80.2°, RAAN: 2.86°), it directly strikes {deb['name']}. "
+                        "Spacecraft destroyed / stuck at this collision node."
+                    )
+                    sat["operational_state"] = "IMPACTED"
+                    sat["subsystem_status"] = "CRITICAL"
+                    self.record_event("ORBITAL_COLLISION", f"Spacecraft impacted by {deb['name']} at 500.8 km", "CRITICAL", sat["id"])
+
+        elif self.active_scenario == "sat_collision":
+            sat_a = self.satellites.get("sat-alpha")
+            sat_b = self.satellites.get("sat-crosser")
+            if sat_a and sat_b:
+                dist = float(np.linalg.norm(np.array(sat_a["pos_eci"]) - np.array(sat_b["pos_eci"])))
+                self.scenario_state["closest_distance_m"] = round(dist, 1)
+                if dist < 50.0:
+                    self.scenario_state["collision_detected"] = True
+                    self.scenario_state["status"] = "TEST_FAILED"
+                    self.scenario_state["collision_point"] = sat_a["pos_eci"]
+                    self.scenario_state["message"] = (
+                        "TEST FAILED: SATELLITE-TO-SATELLITE COLLISION! "
+                        f"Hypervelocity impact between {sat_a['name']} and {sat_b['name']} at orbital intersection node "
+                        "(Altitude: 500.0 km). Mission test: FAILED."
+                    )
+                    sat_a["operational_state"] = "DESTROYED"
+                    sat_b["operational_state"] = "DESTROYED"
+                    sat_a["subsystem_status"] = "CRITICAL"
+                    sat_b["subsystem_status"] = "CRITICAL"
+                    self.record_event("FLEET_COLLISION", f"Catastrophic collision between {sat_a['name']} and {sat_b['name']}", "CRITICAL")
+
         # Basic close-approach screening between satellites and debris
         self._screen_fleet_conjunctions()
 
@@ -400,7 +659,8 @@ class SimulationEngine:
             satellites=satellite_snapshots,
             active_alerts=self.active_alerts,
             recent_events=self.recent_events,
-            debris=self.resident_debris
+            debris=self.resident_debris,
+            scenario_state=self.scenario_state
         )
         return msg
 

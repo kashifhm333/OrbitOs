@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Play, Pause, StepForward, RotateCcw, Radio, ShieldAlert, Clock, AlertTriangle, UserCheck } from 'lucide-react';
+import { Play, Pause, StepForward, RotateCcw, Radio, ShieldAlert, Clock, AlertTriangle, UserCheck, Sparkles } from 'lucide-react';
 import { useOrbitStore } from '../../store/useOrbitStore';
 import { SatelliteSelector } from '../satellite/SatelliteSelector';
 import { NavPage } from './Sidebar';
@@ -9,7 +9,7 @@ interface TopbarProps {
 }
 
 export const Topbar: React.FC<TopbarProps> = ({ onNavigate }) => {
-  const { simulationEpoch, clockState, timeAcceleration, tickNumber, isWsConnected, activeAlerts } = useOrbitStore();
+  const { simulationEpoch, clockState, timeAcceleration, tickNumber, isWsConnected, activeAlerts, scenarioState, setScenarioState } = useOrbitStore();
   const [apiConnected, setApiConnected] = useState(true);
 
   // Check backend health periodically
@@ -37,6 +37,20 @@ export const Topbar: React.FC<TopbarProps> = ({ onNavigate }) => {
     } catch (err) { console.error('Control error:', err); }
   };
 
+  const handleScenarioChange = async (sid: string) => {
+    try {
+      const resp = await fetch(`/api/v1/simulations/scenarios/${sid}`, { method: 'POST' });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.scenario_state) {
+          setScenarioState(data.scenario_state);
+        }
+      }
+    } catch (err) {
+      console.error('Scenario switch failed:', err);
+    }
+  };
+
   const utcString = new Date(simulationEpoch).toUTCString().replace('GMT', 'UTC');
   const alertCount = activeAlerts.length;
 
@@ -55,6 +69,21 @@ export const Topbar: React.FC<TopbarProps> = ({ onNavigate }) => {
 
       {/* Satellite Selector */}
       <SatelliteSelector />
+
+      {/* Scenario Quick Selector */}
+      <div className="hidden lg:flex items-center gap-1.5 bg-[#0B1B2E] border border-[#1A3450] px-2.5 py-1.5 rounded-lg text-xs font-mono">
+        <Sparkles className="w-3.5 h-3.5 text-[#00D5FF]" />
+        <span className="text-[#8295AC] hidden xl:inline">Scenario:</span>
+        <select
+          value={scenarioState?.scenario_id || 'nominal'}
+          onChange={(e) => handleScenarioChange(e.target.value)}
+          className="bg-[#10243B] text-[#E8F0FA] border border-[#1A3450] rounded px-2 py-0.5 text-xs font-medium focus:outline-none focus:border-[#00D5FF] cursor-pointer"
+        >
+          <option value="nominal">1: Nominal Safe Launch</option>
+          <option value="debris_strike">2: Debris Collision Strike</option>
+          <option value="sat_collision">3: Sat-to-Sat Collision (Fail)</option>
+        </select>
+      </div>
 
       {/* UTC Clock */}
       <div className="flex items-center gap-2 font-mono text-xs bg-[#0B1B2E] border border-[#1A3450] px-3 py-1.5 rounded-lg ml-auto">

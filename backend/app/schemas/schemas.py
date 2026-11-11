@@ -181,6 +181,7 @@ class TickSnapshotMessage(BaseModel):
     active_alerts: List[Dict[str, Any]] = []
     recent_events: List[Dict[str, Any]] = []
     debris: List[Dict[str, Any]] = []
+    scenario_state: Optional[Dict[str, Any]] = None
 
 # Update Satellite Request
 class UpdateSatelliteRequest(BaseModel):
