@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: orbitos-backend
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.3"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: ENVIRONMENT
+        value: "production"
+      - key: CORS_ORIGINS
+        value: '["*"]'
+      - key: DATABASE_URL
+        value: "sqlite+aiosqlite:///./orbitos.db"
+      - key: SIMULATION_TICK_SECONDS
+        value: "1.0"
+      - key: DEFAULT_SCENARIO_SEED
+        value: "42"
