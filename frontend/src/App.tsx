@@ -21,11 +21,72 @@ import { AlertsView } from './features/alerts/AlertsView';
 import { ReportsView } from './features/reports/ReportsView';
 import { SettingsView } from './features/settings/SettingsView';
 import { ScenarioControlWidget } from './components/dashboard/ScenarioControlWidget';
+import { TelemetryPopoutView } from './features/telemetry/TelemetryPopoutView';
+import { CommandPalette } from './components/common/CommandPalette';
 
 export const App: React.FC = () => {
-  const { setSnapshot, setWsConnected, clockState, isWsConnected } = useOrbitStore();
+  const { setSnapshot, setWsConnected, clockState, isWsConnected, timeAcceleration } = useOrbitStore();
   const [activePage, setActivePage] = useState<NavPage>('dashboard');
   const [is2D, setIs2D] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+
+  // If detached popout route is requested, render popout cockpit view
+  if (window.location.pathname === '/telemetry-popout') {
+    return <TelemetryPopoutView />;
+  }
+
+  // Global Keyboard Shortcuts (Ctrl+K, Space, 1, 2, 3, 4)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      const isInput = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT');
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+        return;
+      }
+
+      if (isInput) return;
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        const action = clockState === 'RUNNING' ? 'PAUSE' : 'PLAY';
+        fetch('/api/v1/simulations/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, rate: timeAcceleration }),
+        }).catch(console.error);
+      } else if (e.key === '1') {
+        fetch('/api/v1/simulations/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'SET_SPEED', rate: 1.0 }),
+        }).catch(console.error);
+      } else if (e.key === '2') {
+        fetch('/api/v1/simulations/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'SET_SPEED', rate: 5.0 }),
+        }).catch(console.error);
+      } else if (e.key === '3') {
+        fetch('/api/v1/simulations/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'SET_SPEED', rate: 10.0 }),
+        }).catch(console.error);
+      } else if (e.key === '4') {
+        fetch('/api/v1/simulations/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'SET_SPEED', rate: 50.0 }),
+        }).catch(console.error);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [clockState, timeAcceleration]);
 
   useEffect(() => {
     const envWsUrl = import.meta.env.VITE_WS_URL;
@@ -198,6 +259,13 @@ export const App: React.FC = () => {
           </main>
         )}
       </div>
+
+      {/* Global Command Palette (Ctrl+K / Cmd+K) */}
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        onNavigate={setActivePage}
+      />
     </div>
   );
 };

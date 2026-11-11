@@ -1,15 +1,63 @@
 import math
 import numpy as np
 from fastapi import APIRouter, HTTPException, Query
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field
 
 from app.simulation.engine import simulation_engine
 from app.astrodynamics.propagator import propagate_keplerian
 from app.astrodynamics.constants import MU_EARTH, R_EARTH
 from app.astrodynamics.converters import keplerian_to_cartesian
+from app.external.ccsds_tle import parse_ccsds_oem
 
 router = APIRouter(prefix="/api/v1/orbits", tags=["Orbital Parameters & Ephemeris"])
+
+class ImportOEMRequest(BaseModel):
+    oem_text: str = Field(..., description="Standard CCSDS Orbit Ephemeris Message (OEM) text in KVN format")
+    satellite_id: Optional[str] = Field(None, description="Optional target satellite ID to bind this ephemeris to")
+
+@router.post("/import-oem")
+async def import_orbit_oem(req: ImportOEMRequest) -> Dict[str, Any]:
+    """
+    Parses standard CCSDS Orbit Ephemeris Messages (OEM) and applies
+    the ephemeris state to the target satellite or creates a tracked orbital object.
+    """
+    try:
+        parsed_oem = parse_ccsds_oem(req.oem_text)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse CCSDS OEM: {str(e)}")
+
+    target_id = req.satellite_id or parsed_oem["object_id"].lower()
+    kep = parsed_oem["initial_keplerian"]
+
+    if target_id in simulation_engine.satellites:
+        sat = simulation_engine.satellites[target_id]
+        sat["a"] = kep["semi_major_axis_m"]
+        sat["e"] = kep["eccentricity"]
+        sat["i"] = kep["inclination_rad"]
+        sat["Omega"] = kep["raan_rad"]
+        sat["omega"] = kep["arg_periapsis_rad"]
+        sat["nu"] = kep["true_anomaly_rad"]
+        first_ephem = parsed_oem["ephemeris"][0]
+        sat["pos_eci"] = first_ephem["position_eci_m"]
+        sat["vel_eci"] = first_ephem["velocity_eci_mps"]
+    
+    simulation_engine.record_event(
+        "OEM_IMPORTED",
+        f"CCSDS OEM imported for {parsed_oem['object_name']} ({parsed_oem['ephemeris_count']} ephemeris records)",
+        "INFO",
+        target_id if target_id in simulation_engine.satellites else None
+    )
+
+    return {
+        "status": "SUCCESS",
+        "object_name": parsed_oem["object_name"],
+        "object_id": parsed_oem["object_id"],
+        "ephemeris_count": parsed_oem["ephemeris_count"],
+        "initial_keplerian": parsed_oem["initial_keplerian"],
+        "first_epoch": parsed_oem["ephemeris"][0]["epoch"],
+        "last_epoch": parsed_oem["ephemeris"][-1]["epoch"]
+    }
 
 class PropagateOrbitRequest(BaseModel):
     semi_major_axis_km: float = Field(ge=6478.137, le=45000.0)

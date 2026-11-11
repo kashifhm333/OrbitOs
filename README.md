@@ -42,6 +42,60 @@ OrbitOS has been transformed into a production-grade aerospace mission control a
 
 ## 2. System Architecture
 
+```mermaid
+flowchart TD
+    subgraph Frontend["React 18 / Three.js R3F Cockpit"]
+        UI["Mission Control UI (12 Dedicated Views)"]
+        Canvas3D["3D OrbitalCanvas (Three.js R3F)"]
+        ZStore["Zustand Simulation Store"]
+        Popout["Multi-Monitor Telemetry Popout"]
+        CmdPalette["Command Palette (Ctrl+K)"]
+    end
+
+    subgraph FastAPILayer["FastAPI Gateway & Real-Time Comms"]
+        WS["WebSocket Stream (/ws/v1/simulation)"]
+        REST["REST API Endpoints (/api/v1/*)"]
+    end
+
+    subgraph SimulationCore["OrbitOS Discrete Simulation Engine"]
+        Engine["SimulationEngine (Tick Loop)"]
+        RK4["RK4 Astrodynamics (J2 Oblateness + Drag)"]
+        Conjunction["3-Tier Conjunction Screener & B-Plane Pc"]
+        NASABreakup["NASA Standard Breakup Model (Debris Cloud)"]
+        EPSThermal["EPS Battery SoC & Thermal Propagation"]
+    end
+
+    subgraph SafetyAndML["Formal Safety & Intelligence Core"]
+        VDM["VDM-SL Safety Core (SPEC-INV-001..010)"]
+        IForest["Isolation Forest Anomaly Detector (N_trees=50)"]
+        RidgeForecast["24h Predictive Resource Regressor"]
+    end
+
+    subgraph Storage["Persistence & External Telemetry"]
+        DB[("Async SQLite / PostgreSQL (18 Tables)")]
+        External["NASA DONKI / CelesTrak TLE / JPL Horizons"]
+    end
+
+    UI --> ZStore
+    Canvas3D --> ZStore
+    CmdPalette --> REST
+    ZStore <-->|BroadcastChannel| Popout
+    WS -->|Live Telemetry Ticks| ZStore
+    ZStore -->|Operator Commands| REST
+    REST --> Engine
+    Engine --> RK4
+    Engine --> Conjunction
+    Engine --> NASABreakup
+    Engine --> EPSThermal
+    Engine --> VDM
+    EPSThermal --> IForest
+    EPSThermal --> RidgeForecast
+    Engine --> WS
+    REST <--> DB
+    Engine --> DB
+    External -.-> REST
+```
+
 ```text
 OrbitOS/
 ├── frontend/                     # React 18 + Three.js / React Three Fiber + TailwindCSS + Zustand

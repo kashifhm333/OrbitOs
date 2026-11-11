@@ -147,3 +147,55 @@ def test_ml_models_metadata():
     assert "anomaly_detector" in data
     assert "resource_forecaster" in data
 
+def test_import_tle_and_oem_endpoints():
+    tle_text = """1 25544U 98067A   26308.50000000  .00016717  00000-0  10270-3 0  9001
+2 25544  51.6400 208.5000 0005000 120.0000 240.0000 15.50000000 10001"""
+    tle_resp = client.post("/api/v1/satellites/import-tle", json={
+        "tle_text": tle_text,
+        "satellite_name": "ISS-Test-Import"
+    })
+    assert tle_resp.status_code == 201
+    tle_data = tle_resp.json()
+    assert "ISS-Test-Import" in tle_data["name"]
+    assert tle_data["semi_major_axis_m"] > 6000000.0
+
+    oem_text = """CCSDS_OEM_VERS = 2.0
+OBJECT_NAME = TEST_ORBIT_OEM
+OBJECT_ID = 2026-999A
+CENTER_NAME = EARTH
+REF_FRAME = EME2000
+TIME_SYSTEM = UTC
+META_STOP
+2026-11-04T12:00:00.000 6878.137 0.000 0.000 0.000 7.612 0.000
+2026-11-04T12:01:00.000 6870.000 300.000 0.000 -0.500 7.500 0.000
+"""
+    oem_resp = client.post("/api/v1/orbits/import-oem", json={
+        "oem_text": oem_text
+    })
+    assert oem_resp.status_code == 200
+    oem_data = oem_resp.json()
+    assert oem_data["object_name"] == "TEST_ORBIT_OEM"
+    assert oem_data["ephemeris_count"] == 2
+
+def test_export_cdm_and_bulk_acknowledge_alerts():
+    # First trigger screening to ensure active alerts exist
+    screen_resp = client.post("/api/conjunctions/screen", params={"horizon_hours": 24.0})
+    assert screen_resp.status_code == 200
+
+    alerts_resp = client.get("/api/conjunctions/active")
+    assert alerts_resp.status_code == 200
+    alerts = alerts_resp.json()
+
+    if alerts:
+        first_id = alerts[0]["id"]
+        cdm_resp = client.get(f"/api/conjunctions/{first_id}/export-cdm")
+        assert cdm_resp.status_code == 200
+        assert "CCSDS_CDM_VERS = 1.0" in cdm_resp.text
+        assert "COLLISION_PROBABILITY" in cdm_resp.text
+
+    # Test bulk acknowledge
+    ack_all_resp = client.post("/api/v1/alerts/acknowledge-all")
+    assert ack_all_resp.status_code == 200
+    assert ack_all_resp.json()["status"] == "SUCCESS"
+
+

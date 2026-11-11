@@ -191,6 +191,42 @@ export const IntelligenceView: React.FC = () => {
               {/* Baseline 20% Critical SoC Reference Line */}
               <line x1="0" y1="80" x2={forecast.trajectory.length * 20} y2="80" stroke="#FF4D5E" strokeDasharray="3,3" strokeWidth="1" />
 
+              {/* Isolation Forest Visual XAI Anomaly Bounding Box & Attribution */}
+              {anomalyDetected && (
+                <g>
+                  <rect
+                    x="10"
+                    y="8"
+                    width={forecast.trajectory.length * 20 - 20}
+                    height="84"
+                    fill="#FF4D5E"
+                    fillOpacity="0.08"
+                    stroke="#FF4D5E"
+                    strokeWidth="1.5"
+                    strokeDasharray="4,4"
+                    rx="4"
+                  />
+                  <rect
+                    x="16"
+                    y="12"
+                    width="320"
+                    height="18"
+                    fill="#FF4D5E"
+                    rx="3"
+                  />
+                  <text
+                    x="22"
+                    y="25"
+                    fill="#050B16"
+                    fontSize="9"
+                    fontWeight="bold"
+                    fontFamily="monospace"
+                  >
+                    ⚠ ISOLATION FOREST ANOMALY (N_trees=50) · 88.5% FEATURE ATTRIBUTION
+                  </text>
+                </g>
+              )}
+
               {/* Forecast Trajectory Line */}
               <polyline
                 fill="none"

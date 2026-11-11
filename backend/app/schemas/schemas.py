@@ -218,6 +218,10 @@ class AlertItemResponse(BaseModel):
     epoch: datetime
     is_acknowledged: bool
     acknowledged_at: Optional[datetime] = None
+    relative_velocity_kms: Optional[float] = None
+    collision_probability: Optional[float] = None
+    miss_distance_m: Optional[float] = None
+    b_plane: Optional[Dict[str, Any]] = None
 
 # Report Schemas
 class GenerateReportRequest(BaseModel):

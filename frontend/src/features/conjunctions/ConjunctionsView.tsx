@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { ShieldAlert, Crosshair, AlertTriangle, Zap, CheckCircle2, Flame, RefreshCw } from 'lucide-react';
 import { useOrbitStore } from '../../store/useOrbitStore';
 import { ManeuverCandidate } from '../../types';
+import { BPlaneRICPlot } from '../../components/visualization/BPlaneRICPlot';
 
 export const ConjunctionsView: React.FC = () => {
-  const { selectedSatelliteId, setSelectedSatellite, satellites, activeAlerts } = useOrbitStore();
+  const { selectedSatelliteId, setSelectedSatellite, satellites, activeAlerts, setPreviewManeuver } = useOrbitStore();
   const [screening, setScreening] = useState(false);
   const [candidates, setCandidates] = useState<ManeuverCandidate[]>([]);
   const [loadingCandidates, setLoadingCandidates] = useState(false);
@@ -225,10 +226,12 @@ export const ConjunctionsView: React.FC = () => {
             return (
               <div
                 key={cand.id}
+                onMouseEnter={() => setPreviewManeuver(cand)}
+                onMouseLeave={() => setPreviewManeuver(null)}
                 className={`p-4 rounded-xl border transition-all space-y-3 ${
                   isApproved
                     ? 'bg-[#10243B] border-[#00D69A] shadow-lg shadow-emerald-500/10'
-                    : 'bg-[#071426] border-[#1A3450] hover:border-[#1A3450]/80'
+                    : 'bg-[#071426] border-[#1A3450] hover:border-[#00D5FF]/60 hover:shadow-lg hover:shadow-cyan-500/5'
                 }`}
               >
                 <div className="flex items-center justify-between">
@@ -246,6 +249,14 @@ export const ConjunctionsView: React.FC = () => {
                     {cand.status}
                   </span>
                 </div>
+
+                {/* Miniature 2D RIC B-Plane Plot */}
+                <BPlaneRICPlot
+                  missDistanceM={cand.projected_miss_distance_m}
+                  deltaVMps={cand.delta_v_total_mps ?? cand.delta_v_magnitude_mps ?? 0}
+                  strategy={cand.strategy || cand.maneuver_type}
+                  isNoAction={isNoAction}
+                />
 
                 <div className="grid grid-cols-3 gap-2 text-[11px]">
                   <div className="p-2 rounded bg-[#0B1B2E] border border-[#1A3450]">

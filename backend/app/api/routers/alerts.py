@@ -20,16 +20,24 @@ async def list_active_alerts(
     for conj in simulation_engine.active_alerts:
         alert_id = conj.get("id", str(uuid.uuid4()))
         ack_info = _acknowledged_alerts.get(alert_id, {})
+        rel_v_kms = conj.get("relative_velocity_kms")
+        if rel_v_kms is None and conj.get("rel_velocity_mps") is not None:
+            rel_v_kms = round(conj["rel_velocity_mps"] / 1000.0, 4)
+        
         alerts.append({
             "id": alert_id,
             "alert_type": "CONJUNCTION",
             "severity": conj.get("risk_level", "WARNING"),
-            "title": conj.get("title", "Orbital Conjunction Warning"),
-            "message": f"Miss distance {conj.get('miss_distance_m')} m. Close approach warning.",
+            "title": conj.get("title", f"Conjunction Alert: {conj.get('primary_satellite_name', 'Primary')} vs {conj.get('secondary_object_name', 'Secondary')}"),
+            "message": f"Miss distance {conj.get('miss_distance_m')} m. Rel velocity: {rel_v_kms} km/s. Pc: {conj.get('collision_probability', 0.0):.2e}.",
             "source_entity_id": conj.get("id"),
             "epoch": datetime.fromisoformat(conj.get("epoch", simulation_engine.current_epoch.isoformat())),
             "is_acknowledged": ack_info.get("is_acknowledged", False),
-            "acknowledged_at": ack_info.get("acknowledged_at")
+            "acknowledged_at": ack_info.get("acknowledged_at"),
+            "relative_velocity_kms": rel_v_kms,
+            "collision_probability": conj.get("collision_probability"),
+            "miss_distance_m": conj.get("miss_distance_m"),
+            "b_plane": conj.get("b_plane")
         })
 
     # 2. From active satellite faults
@@ -70,6 +78,34 @@ async def list_active_alerts(
         alerts = [a for a in alerts if a["severity"].upper() == severity.upper()]
 
     return alerts
+
+@router.post("/acknowledge-all")
+async def acknowledge_all_alerts(
+    severity: Optional[str] = Query(None, description="Optional severity filter (e.g., WARNING)")
+):
+    """Bulk operator acknowledgment for all active non-critical warnings or filtered alerts."""
+    now = simulation_engine.current_epoch
+    active = await list_active_alerts(severity=severity)
+    acked_count = 0
+    for a in active:
+        # If no severity filter, only ack WARNING and INFO by default (keep CRITICAL visible unless explicitly requested)
+        if severity or a["severity"].upper() in ("WARNING", "INFO"):
+            _acknowledged_alerts[a["id"]] = {
+                "is_acknowledged": True,
+                "acknowledged_at": now
+            }
+            acked_count += 1
+            
+    simulation_engine.record_event(
+        "ALERTS_BULK_ACKNOWLEDGED",
+        f"Bulk acknowledged {acked_count} alerts (filter: {severity or 'non-critical'})",
+        "INFO"
+    )
+    return {
+        "status": "SUCCESS",
+        "acknowledged_count": acked_count,
+        "epoch": now.isoformat()
+    }
 
 @router.post("/{alert_id}/acknowledge", response_model=AlertItemResponse)
 async def acknowledge_alert(alert_id: str):

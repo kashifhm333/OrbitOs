@@ -57,9 +57,22 @@ export interface SatelliteEntity {
 export interface ConjunctionAlert {
   id: string;
   title: string;
+  primary_satellite_id?: string;
+  secondary_object_id?: string;
+  tca_epoch?: string;
+  time_to_tca_seconds?: number;
   miss_distance_m: number;
   risk_level: 'INFO' | 'WATCH' | 'WARNING' | 'CRITICAL';
   epoch: string;
+  relative_velocity_kms?: number;
+  collision_probability?: number;
+  b_plane?: {
+    x_m: number;
+    z_m: number;
+    sigma_x_m: number;
+    sigma_z_m: number;
+    rho_xz: number;
+  };
 }
 
 export interface ScenarioState {
@@ -74,6 +87,12 @@ export interface ScenarioState {
   impact_inclination_deg?: number;
   impact_raan_deg?: number;
   collision_point?: [number, number, number] | null;
+  breakup_fragments?: Array<{
+    id: string;
+    pos: [number, number, number];
+    vel?: [number, number, number];
+    size_m?: number;
+  }>;
 }
 
 export interface FormalInvariantsState {

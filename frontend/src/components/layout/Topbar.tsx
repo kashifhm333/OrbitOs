@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Play, Pause, StepForward, RotateCcw, Radio, ShieldAlert, Clock, AlertTriangle, UserCheck, Sparkles } from 'lucide-react';
+import { Play, Pause, StepForward, RotateCcw, Radio, ShieldAlert, Clock, AlertTriangle, UserCheck, Sparkles, Search } from 'lucide-react';
 import { useOrbitStore } from '../../store/useOrbitStore';
 import { SatelliteSelector } from '../satellite/SatelliteSelector';
 import { NavPage } from './Sidebar';
@@ -13,6 +13,8 @@ export const Topbar: React.FC<TopbarProps> = ({ onNavigate }) => {
     simulationEpoch, 
     clockState, 
     timeAcceleration, 
+    timeScale,
+    setTimeScale,
     tickNumber, 
     isWsConnected, 
     activeAlerts, 
@@ -20,6 +22,21 @@ export const Topbar: React.FC<TopbarProps> = ({ onNavigate }) => {
     loadScenario 
   } = useOrbitStore();
   const [apiConnected, setApiConnected] = useState(true);
+
+  const cycleTimeScale = () => {
+    if (timeScale === 'UTC') setTimeScale('TAI');
+    else if (timeScale === 'TAI') setTimeScale('TDB');
+    else setTimeScale('UTC');
+  };
+
+  const getDisplayEpochString = () => {
+    const baseDate = new Date(simulationEpoch);
+    let offsetMs = 0;
+    if (timeScale === 'TAI') offsetMs = 37000;
+    else if (timeScale === 'TDB') offsetMs = 69184;
+    const adjustedDate = new Date(baseDate.getTime() + offsetMs);
+    return adjustedDate.toUTCString().replace('GMT', timeScale);
+  };
 
   // Check backend health periodically
   useEffect(() => {
@@ -54,7 +71,6 @@ export const Topbar: React.FC<TopbarProps> = ({ onNavigate }) => {
     }
   };
 
-  const utcString = new Date(simulationEpoch).toUTCString().replace('GMT', 'UTC');
   const alertCount = activeAlerts.length;
 
   return (
@@ -88,12 +104,32 @@ export const Topbar: React.FC<TopbarProps> = ({ onNavigate }) => {
         </select>
       </div>
 
-      {/* UTC Clock */}
-      <div className="flex items-center gap-2 font-mono text-xs bg-[#0B1B2E] border border-[#1A3450] px-3 py-1.5 rounded-lg ml-auto">
-        <Clock className="w-3.5 h-3.5 text-[#00D5FF]" />
-        <span className="text-[#00D5FF] font-semibold">{utcString}</span>
-        <span className="text-[#8295AC] ml-2">TICK #{tickNumber.toString().padStart(6, '0')}</span>
-      </div>
+      {/* Command Palette Trigger */}
+      <button
+        onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}
+        className="hidden md:flex items-center gap-2 bg-[#0B1B2E] hover:bg-[#10243B] border border-[#1A3450] hover:border-[#00D5FF]/40 px-2.5 py-1.5 rounded-lg text-xs font-mono text-[#8295AC] transition-all cursor-pointer"
+        title="Open Command Palette (Ctrl+K)"
+      >
+        <Search className="w-3.5 h-3.5 text-[#00D5FF]" />
+        <span>Commands</span>
+        <kbd className="px-1.5 py-0.5 rounded text-[10px] bg-[#10243B] text-[#8295AC] border border-[#1A3450]">
+          ⌘K
+        </kbd>
+      </button>
+
+      {/* Continuous Time Scale Clock Toggle */}
+      <button
+        onClick={cycleTimeScale}
+        className="flex items-center gap-2 font-mono text-xs bg-[#0B1B2E] hover:bg-[#10243B] border border-[#1A3450] hover:border-[#00D5FF]/40 px-3 py-1.5 rounded-lg ml-auto transition-all cursor-pointer group"
+        title="Click to toggle time scale: UTC ↔ TAI (+37s) ↔ TDB (+69s)"
+      >
+        <Clock className="w-3.5 h-3.5 text-[#00D5FF] group-hover:rotate-45 transition-transform" />
+        <span className="text-[#00D5FF] font-semibold">{getDisplayEpochString()}</span>
+        <span className="px-1.5 py-0.5 rounded text-[10px] bg-[#00D5FF]/20 text-[#00D5FF] border border-[#00D5FF]/40 font-bold">
+          {timeScale}
+        </span>
+        <span className="text-[#8295AC] ml-1">TICK #{tickNumber.toString().padStart(6, '0')}</span>
+      </button>
 
       {/* Sim Controls */}
       <div className="flex items-center gap-1 bg-[#0B1B2E] border border-[#1A3450] px-2.5 py-1.5 rounded-lg">
@@ -122,6 +158,24 @@ export const Topbar: React.FC<TopbarProps> = ({ onNavigate }) => {
             {r}x
           </button>
         ))}
+
+        <div className="w-px h-5 bg-[#1A3450] mx-1" />
+
+        {/* Interactive Timeline Scrubber Slider */}
+        <div className="hidden sm:flex items-center gap-1.5 px-1 bg-[#10243B]/60 rounded-md py-0.5 border border-[#1A3450]/40">
+          <input
+            type="range"
+            min="0"
+            max={Math.max(100, tickNumber)}
+            value={tickNumber}
+            onChange={(e) => {
+              const targetTick = parseInt(e.target.value, 10);
+              useOrbitStore.setState({ tickNumber: targetTick });
+            }}
+            className="w-14 lg:w-20 h-1 bg-[#1A3450] rounded-lg appearance-none cursor-pointer accent-[#00D5FF]"
+            title={`Scrub Simulation Timeline (Tick #${tickNumber})`}
+          />
+        </div>
       </div>
 
       {/* Active Alerts Pill */}

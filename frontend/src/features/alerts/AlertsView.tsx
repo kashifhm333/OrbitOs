@@ -39,6 +39,17 @@ export const AlertsView: React.FC = () => {
     }
   };
 
+  const handleAcknowledgeAll = async () => {
+    try {
+      const resp = await fetch('/api/v1/alerts/acknowledge-all', { method: 'POST' });
+      if (resp.ok) {
+        await fetchAlerts();
+      }
+    } catch (err) {
+      console.error('Error acknowledging all warnings:', err);
+    }
+  };
+
   const filtered = filterSeverity === 'ALL'
     ? alerts
     : alerts.filter(a => a.severity.toUpperCase() === filterSeverity);
@@ -72,6 +83,16 @@ export const AlertsView: React.FC = () => {
               </button>
             ))}
           </div>
+
+          {/* Acknowledge All Warnings Button */}
+          <button
+            onClick={handleAcknowledgeAll}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FFB547]/15 border border-[#FFB547]/40 text-[#FFB547] hover:bg-[#FFB547]/25 text-[10px] font-bold transition-all cursor-pointer shadow-sm shadow-amber-500/10"
+            title="Acknowledge all non-critical warnings in a single click"
+          >
+            <CheckCircle className="w-3.5 h-3.5" />
+            <span>Acknowledge All Warnings</span>
+          </button>
 
           <button
             onClick={fetchAlerts}
@@ -123,6 +144,16 @@ export const AlertsView: React.FC = () => {
                           {al.severity}
                         </span>
                         <span className="text-[10px] text-[#8295AC]">Type: {al.alert_type}</span>
+                        {al.relative_velocity_kms !== undefined && al.relative_velocity_kms !== null && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#10243B] text-[#00D5FF] border border-[#1A3450]">
+                            V_rel: {al.relative_velocity_kms} km/s
+                          </span>
+                        )}
+                        {al.collision_probability !== undefined && al.collision_probability !== null && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#10243B] text-[#FF4D5E] border border-[#FF4D5E]/40 font-bold">
+                            Pc: {al.collision_probability < 0.0001 ? al.collision_probability.toExponential(2) : al.collision_probability.toFixed(4)}
+                          </span>
+                        )}
                       </div>
                       <p className="text-[11px] text-[#E8F0FA]">{al.message}</p>
                       <div className="text-[10px] text-[#8295AC] mt-1">

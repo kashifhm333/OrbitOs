@@ -120,6 +120,9 @@ class ConjunctionScreener:
         tca_epoch = start_epoch + timedelta(seconds=t_tca_seconds)
         risk = self.classify_risk(miss_dist_m)
 
+        # Compute B-plane encounter geometry and 2D Gaussian Pc
+        b_plane_res = self.compute_b_plane_and_pc(r_a_tca, v_a_tca, r_b_tca, v_b_tca)
+
         return {
             "primary_satellite_id": primary_id,
             "primary_satellite_name": primary_name,
@@ -129,9 +132,121 @@ class ConjunctionScreener:
             "time_to_tca_seconds": round(t_tca_seconds, 2),
             "miss_distance_m": round(miss_dist_m, 2),
             "rel_velocity_mps": round(rel_vel_mps, 2),
+            "relative_velocity_kms": b_plane_res["relative_velocity_kms"],
+            "collision_probability": b_plane_res["collision_probability"],
+            "b_plane": b_plane_res["b_plane"],
             "risk_level": risk,
             "status": "DETECTED",
             "primary_r_eci_m": r_a_tca.tolist(),
             "secondary_r_eci_m": r_b_tca.tolist()
+        }
+
+    @staticmethod
+    def compute_b_plane_and_pc(
+        r_a: np.ndarray,
+        v_a: np.ndarray,
+        r_b: np.ndarray,
+        v_b: np.ndarray,
+        r_hb_m: float = 10.0,
+        sigma_ric_primary: Tuple[float, float, float] = (20.0, 250.0, 50.0),
+        sigma_ric_secondary: Tuple[float, float, float] = (50.0, 500.0, 100.0)
+    ) -> Dict[str, Any]:
+        """
+        Computes 2D B-plane encounter frame coordinates and 2D Gaussian Collision Probability (Pc).
+        Uses NASA standard RIC covariance ellipsoids projected onto the encounter B-plane.
+        """
+        dr = r_b - r_a
+        dv = v_b - v_a
+        v_rel = float(np.linalg.norm(dv))
+        if v_rel < 1e-4:
+            v_rel = 1e-4
+
+        # Primary RIC Unit Vectors
+        r_norm = float(np.linalg.norm(r_a))
+        r_hat = r_a / (r_norm if r_norm > 0 else 1.0)
+        h_vec = np.cross(r_a, v_a)
+        h_norm = float(np.linalg.norm(h_vec))
+        if h_norm < 1e-4:
+            h_vec = np.array([0.0, 0.0, 1.0])
+            h_norm = 1.0
+        c_hat = h_vec / h_norm
+        i_hat = np.cross(c_hat, r_hat)
+        i_hat_norm = float(np.linalg.norm(i_hat))
+        if i_hat_norm > 0:
+            i_hat = i_hat / i_hat_norm
+
+        # Rotation matrix from RIC to ECI
+        t_ric_to_eci = np.column_stack([r_hat, i_hat, c_hat])
+
+        # Combined RIC Covariance
+        cov_ric = np.diag([
+            sigma_ric_primary[0]**2 + sigma_ric_secondary[0]**2,
+            sigma_ric_primary[1]**2 + sigma_ric_secondary[1]**2,
+            sigma_ric_primary[2]**2 + sigma_ric_secondary[2]**2
+        ])
+        cov_eci = t_ric_to_eci @ cov_ric @ t_ric_to_eci.T
+
+        # B-Plane Encounter Unit Vectors (y_hat along relative velocity)
+        y_hat = dv / v_rel
+        cross_yr = np.cross(y_hat, r_hat)
+        cross_norm = float(np.linalg.norm(cross_yr))
+        if cross_norm < 1e-4:
+            cross_yr = np.cross(y_hat, np.array([0.0, 0.0, 1.0]))
+            cross_norm = float(np.linalg.norm(cross_yr))
+            if cross_norm < 1e-4:
+                cross_yr = np.array([1.0, 0.0, 0.0])
+                cross_norm = 1.0
+        x_hat = cross_yr / cross_norm
+        z_hat = np.cross(x_hat, y_hat)
+        z_hat_norm = float(np.linalg.norm(z_hat))
+        if z_hat_norm > 0:
+            z_hat = z_hat / z_hat_norm
+
+        # Projection matrix onto B-plane (2x3)
+        m_b = np.vstack([x_hat, z_hat])
+
+        # 2D B-plane relative coordinates
+        r_b_plane = m_b @ dr
+        x_b, z_b = float(r_b_plane[0]), float(r_b_plane[1])
+
+        # 2D B-plane covariance (2x2)
+        sigma_b = m_b @ cov_eci @ m_b.T
+        sigma_x2 = max(1.0, float(sigma_b[0, 0]))
+        sigma_z2 = max(1.0, float(sigma_b[1, 1]))
+        sigma_xz = float(sigma_b[0, 1])
+
+        sigma_x = math.sqrt(sigma_x2)
+        sigma_z = math.sqrt(sigma_z2)
+        rho_xz = sigma_xz / (sigma_x * sigma_z)
+        rho_xz = max(-0.9999, min(0.9999, rho_xz))
+
+        det_b = sigma_x2 * sigma_z2 * (1.0 - rho_xz ** 2)
+        inv_b = np.array([
+            [sigma_z2, -sigma_xz],
+            [-sigma_xz, sigma_x2]
+        ]) / det_b
+
+        q = float(r_b_plane.T @ inv_b @ r_b_plane)
+        
+        # 2D Gaussian integration over hard body circle
+        scaling = (r_hb_m ** 2) / (2.0 * sigma_x * sigma_z * math.sqrt(1.0 - rho_xz ** 2))
+        exponent = -0.5 * q
+        if exponent < -50.0:
+            pc = 0.0
+        else:
+            raw_pc = scaling * math.exp(exponent)
+            pc = 1.0 - math.exp(-raw_pc)
+            pc = max(0.0, min(1.0, float(pc)))
+
+        return {
+            "collision_probability": pc,
+            "relative_velocity_kms": round(v_rel / 1000.0, 4),
+            "b_plane": {
+                "x_m": round(x_b, 2),
+                "z_m": round(z_b, 2),
+                "sigma_x_m": round(sigma_x, 2),
+                "sigma_z_m": round(sigma_z, 2),
+                "rho_xz": round(rho_xz, 4)
+            }
         }
 

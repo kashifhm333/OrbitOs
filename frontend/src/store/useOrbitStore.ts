@@ -12,6 +12,7 @@ interface OrbitStore {
   simulationEpoch: string;
   clockState: 'STOPPED' | 'READY' | 'RUNNING' | 'PAUSED';
   timeAcceleration: number;
+  timeScale: 'UTC' | 'TAI' | 'TDB';
   tickNumber: number;
   satellites: Record<string, SatelliteTelemetry>;
   selectedSatelliteId: string | null;
@@ -24,6 +25,7 @@ interface OrbitStore {
   showDebris: boolean;
   showGroundStations: boolean;
   showTracks: boolean;
+  previewManeuver: any | null;
 
   setSnapshot: (snapshot: TickSnapshotMessage) => void;
   setSelectedSatellite: (id: string | null) => void;
@@ -34,6 +36,8 @@ interface OrbitStore {
   setShowDebris: (show: boolean) => void;
   setShowGroundStations: (show: boolean) => void;
   setShowTracks: (show: boolean) => void;
+  setTimeScale: (scale: 'UTC' | 'TAI' | 'TDB') => void;
+  setPreviewManeuver: (m: any | null) => void;
 }
 
 const INITIAL_SATELLITES: Record<string, SatelliteTelemetry> = {
@@ -102,6 +106,7 @@ export const useOrbitStore = create<OrbitStore>((set, get) => ({
   simulationEpoch: '2026-11-04T12:00:00Z',
   clockState: 'READY',
   timeAcceleration: 1.0,
+  timeScale: 'UTC',
   tickNumber: 0,
   satellites: INITIAL_SATELLITES,
   selectedSatelliteId: 'sat-001',
@@ -123,6 +128,7 @@ export const useOrbitStore = create<OrbitStore>((set, get) => ({
   showDebris: true,
   showGroundStations: true,
   showTracks: true,
+  previewManeuver: null,
 
   setSnapshot: (snapshot) => {
     const satMap: Record<string, SatelliteTelemetry> = {};
@@ -199,4 +205,6 @@ export const useOrbitStore = create<OrbitStore>((set, get) => ({
   setShowDebris: (show) => set({ showDebris: show }),
   setShowGroundStations: (show) => set({ showGroundStations: show }),
   setShowTracks: (show) => set({ showTracks: show }),
+  setTimeScale: (timeScale) => set({ timeScale }),
+  setPreviewManeuver: (previewManeuver) => set({ previewManeuver }),
 }));

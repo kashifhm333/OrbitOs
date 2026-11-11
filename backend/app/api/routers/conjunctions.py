@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Response
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 import math
@@ -6,6 +6,7 @@ import uuid
 
 from app.simulation.engine import simulation_engine
 from app.conjunction.screener import ConjunctionScreener
+from app.external.ccsds_tle import generate_ccsds_cdm
 
 router = APIRouter(tags=["Conjunction Detection & Risk Analysis"])
 
@@ -109,3 +110,21 @@ async def get_conjunction_event(conjunction_id: str):
     if not alert:
         raise HTTPException(status_code=404, detail="Conjunction event not found")
     return alert
+
+@router.get("/{conjunction_id}/export-cdm")
+async def export_conjunction_cdm(conjunction_id: str):
+    """
+    Exports a flagged conjunction event as a standard CCSDS Conjunction Data Message (CDM).
+    Complies with CCSDS 508.0-B-1 (Blue Book standard).
+    """
+    alert = next((a for a in simulation_engine.active_alerts if a.get("id") == conjunction_id), None)
+    if not alert:
+        # If active alerts list is empty or ID not found, check if synthetic pair can be generated
+        raise HTTPException(status_code=404, detail=f"Conjunction event {conjunction_id} not found in active alerts")
+
+    cdm_kvn = generate_ccsds_cdm(alert)
+    return Response(
+        content=cdm_kvn,
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename=cdm_{conjunction_id[:8]}.txt"}
+    )

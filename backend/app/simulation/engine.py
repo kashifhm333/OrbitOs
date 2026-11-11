@@ -417,6 +417,40 @@ class SimulationEngine:
             except Exception:
                 pass
 
+    def _spawn_kinetic_breakup(self, parent_pos: List[float], parent_vel: List[float], num_fragments: int = 200):
+        """
+        Simplified NASA Standard Breakup Model:
+        Generates secondary debris fragments with Gaussian delta_v perturbations around parent velocity vector.
+        """
+        rng = np.random.RandomState(42)
+        fragments = []
+        p_pos = np.array(parent_pos, dtype=np.float64)
+        p_vel = np.array(parent_vel, dtype=np.float64)
+        
+        for k in range(num_fragments):
+            d_v = rng.normal(loc=0.0, scale=80.0, size=3)
+            frag_vel = p_vel + d_v
+            fragments.append({
+                "id": f"frag-{k:03d}",
+                "pos": [float(p_pos[0]), float(p_pos[1]), float(p_pos[2])],
+                "vel": [float(frag_vel[0]), float(frag_vel[1]), float(frag_vel[2])],
+                "size_m": float(rng.uniform(0.05, 0.35))
+            })
+        self.scenario_state["breakup_fragments"] = fragments
+
+    def _propagate_breakup_fragments(self, delta_seconds: float):
+        """Propagates secondary debris fragments through 3D orbital space."""
+        if not self.scenario_state or "breakup_fragments" not in self.scenario_state:
+            return
+        for frag in self.scenario_state["breakup_fragments"]:
+            pos = frag["pos"]
+            vel = frag["vel"]
+            frag["pos"] = [
+                pos[0] + vel[0] * delta_seconds,
+                pos[1] + vel[1] * delta_seconds,
+                pos[2] + vel[2] * delta_seconds
+            ]
+
     def _evaluate_formal_invariants(self) -> Dict[str, Any]:
         """
         Evaluates formal VDM-SL safety invariants against live satellite telemetry.
@@ -626,6 +660,10 @@ class SimulationEngine:
             if len(self.telemetry_history[sat["id"]]) > 100:
                 self.telemetry_history[sat["id"]].pop(0)
 
+        # Advance debris fragments if active
+        if self.scenario_state and self.scenario_state.get("breakup_fragments"):
+            self._propagate_breakup_fragments(delta_seconds)
+
         # Check active scenario conditions before snapshot generation
         if self.active_scenario == "debris_strike":
             sat = self.satellites.get("sat-strike")
@@ -634,6 +672,7 @@ class SimulationEngine:
                 dist = float(np.linalg.norm(np.array(sat["pos_eci"]) - np.array(deb["pos_eci"])))
                 self.scenario_state["closest_distance_m"] = round(dist, 1)
                 if dist < 50.0:
+                    was_collided = self.scenario_state.get("collision_detected", False)
                     self.scenario_state["collision_detected"] = True
                     self.scenario_state["status"] = "COLLISION_IMPACT"
                     self.scenario_state["collision_point"] = sat["pos_eci"]
@@ -649,7 +688,9 @@ class SimulationEngine:
                     sat["bus_current_a"] = 0.0
                     sat["propellant_mass_kg"] = 0.0
                     sat["comm_link_active"] = False
-                    self.record_event("ORBITAL_COLLISION", f"Spacecraft impacted by {deb['name']} at 500.8 km", "CRITICAL", sat["id"])
+                    if not was_collided:
+                        self.record_event("ORBITAL_COLLISION", f"Spacecraft impacted by {deb['name']} at 500.8 km", "CRITICAL", sat["id"])
+                        self._spawn_kinetic_breakup(sat["pos_eci"], sat["vel_eci"], num_fragments=200)
 
         elif self.active_scenario == "sat_collision":
             sat_a = self.satellites.get("sat-alpha")
@@ -658,6 +699,7 @@ class SimulationEngine:
                 dist = float(np.linalg.norm(np.array(sat_a["pos_eci"]) - np.array(sat_b["pos_eci"])))
                 self.scenario_state["closest_distance_m"] = round(dist, 1)
                 if dist < 50.0:
+                    was_collided = self.scenario_state.get("collision_detected", False)
                     self.scenario_state["collision_detected"] = True
                     self.scenario_state["status"] = "TEST_FAILED"
                     self.scenario_state["collision_point"] = sat_a["pos_eci"]
@@ -680,7 +722,9 @@ class SimulationEngine:
                     sat_b["propellant_mass_kg"] = 0.0
                     sat_a["comm_link_active"] = False
                     sat_b["comm_link_active"] = False
-                    self.record_event("FLEET_COLLISION", f"Catastrophic collision between {sat_a['name']} and {sat_b['name']}", "CRITICAL")
+                    if not was_collided:
+                        self.record_event("FLEET_COLLISION", f"Catastrophic collision between {sat_a['name']} and {sat_b['name']}", "CRITICAL")
+                        self._spawn_kinetic_breakup(sat_a["pos_eci"], sat_a["vel_eci"], num_fragments=250)
 
         # Generate Satellite Snapshots
         for sat in self.satellites.values():

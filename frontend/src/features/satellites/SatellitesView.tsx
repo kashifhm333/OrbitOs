@@ -3,6 +3,53 @@ import { Layers, Plus, Trash2, RefreshCw } from 'lucide-react';
 import { useOrbitStore } from '../../store/useOrbitStore';
 import { SatelliteEntity } from '../../types';
 
+const TelemetrySparkline: React.FC<{ soc: number; voltage?: number; inEclipse?: boolean }> = ({ soc, voltage = 28.2, inEclipse = false }) => {
+  const pts = [
+    Math.max(0, soc - (inEclipse ? 2.5 : -2.0)),
+    Math.max(0, soc - (inEclipse ? 1.8 : -1.5)),
+    Math.max(0, soc - (inEclipse ? 1.2 : -1.0)),
+    Math.max(0, soc - (inEclipse ? 0.6 : -0.5)),
+    soc
+  ];
+  const min = Math.min(...pts) - 5;
+  const max = Math.max(...pts) + 5;
+  const w = 64;
+  const h = 20;
+
+  const polyPoints = pts.map((val, idx) => {
+    const x = (idx / (pts.length - 1)) * w;
+    const y = h - ((val - min) / (max - min || 1)) * (h - 4) - 2;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+
+  const lastY = h - ((pts[pts.length - 1] - min) / (max - min || 1)) * (h - 4) - 2;
+
+  return (
+    <div className="flex items-center gap-2 select-none">
+      <svg width={w} height={h} className="overflow-visible">
+        <polyline
+          fill="none"
+          stroke={inEclipse ? "#FFB547" : "#00D5FF"}
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          points={polyPoints}
+        />
+        <circle
+          cx={w}
+          cy={lastY}
+          r="2"
+          fill="#00D69A"
+        />
+      </svg>
+      <div className="text-[9px] font-mono leading-tight">
+        <div className="text-[#00D69A]">{voltage.toFixed(1)}V</div>
+        <div className="text-[#8295AC]">{soc.toFixed(0)}%</div>
+      </div>
+    </div>
+  );
+};
+
 export const SatellitesView: React.FC = () => {
   const { selectedSatelliteId, setSelectedSatellite } = useOrbitStore();
   const [satellites, setSatellites] = useState<SatelliteEntity[]>([]);
@@ -163,6 +210,7 @@ export const SatellitesView: React.FC = () => {
               <th className="px-4 py-3">Inclination</th>
               <th className="px-4 py-3">Dry / Fuel Mass</th>
               <th className="px-4 py-3">Battery SoC</th>
+              <th className="px-4 py-3">Telemetry Trend (1h)</th>
               <th className="px-4 py-3">Eclipse</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
@@ -218,6 +266,9 @@ export const SatellitesView: React.FC = () => {
                         style={{ width: `${sat.battery_soc_pct}%` }}
                       />
                     </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <TelemetrySparkline soc={sat.battery_soc_pct} inEclipse={sat.in_eclipse} />
                   </td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 rounded text-[9px] font-semibold ${

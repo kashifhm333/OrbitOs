@@ -1,7 +1,8 @@
 import uuid
 import numpy as np
 from fastapi import APIRouter, HTTPException
-from typing import List
+from typing import List, Optional
+from pydantic import BaseModel, Field
 from app.simulation.engine import simulation_engine
 from app.schemas.schemas import (
     CreateSatelliteRequest,
@@ -10,11 +11,111 @@ from app.schemas.schemas import (
     OrbitalStateResponse
 )
 from app.astrodynamics.converters import keplerian_to_cartesian
+from app.external.ccsds_tle import parse_tle
 from app.models.database import AsyncSessionLocal
 from app.models.entities import Satellite as SatelliteModel, OrbitalState as OrbitalStateModel
 from sqlalchemy import select, delete
 
 router = APIRouter(tags=["Satellites"])
+
+class ImportTLERequest(BaseModel):
+    tle_text: str = Field(..., description="Two-Line Element (TLE) string (2 or 3 lines)")
+    satellite_name: Optional[str] = Field(None, description="Optional custom name override")
+    dry_mass_kg: Optional[float] = Field(150.0, ge=1.0)
+    propellant_mass_kg: Optional[float] = Field(15.0, ge=0.0)
+
+@router.post("/import-tle", response_model=SatelliteResponse, status_code=201)
+async def import_satellite_tle(req: ImportTLERequest):
+    """
+    Parses standard NORAD Two-Line Element (TLE) sets and provisions
+    the new spacecraft into the active OrbitOS fleet and simulation engine.
+    """
+    try:
+        parsed = parse_tle(req.tle_text, req.satellite_name)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse TLE: {str(e)}")
+
+    sat_id = f"sat-{parsed['sat_number'].lower()}"
+    # If ID exists, generate unique suffix
+    if sat_id in simulation_engine.satellites:
+        sat_id = f"{sat_id}-{str(uuid.uuid4())[:4]}"
+
+    a_m = parsed["semi_major_axis_m"]
+    e = parsed["eccentricity"]
+    i_rad = parsed["inclination_rad"]
+    Omega_rad = parsed["raan_rad"]
+    omega_rad = parsed["arg_periapsis_rad"]
+    nu_rad = parsed["true_anomaly_rad"]
+
+    r_eci, v_eci = keplerian_to_cartesian(a_m, e, i_rad, Omega_rad, omega_rad, nu_rad)
+
+    sat_data = {
+        "id": sat_id,
+        "name": parsed["name"],
+        "dry_mass_kg": req.dry_mass_kg or 150.0,
+        "propellant_mass_kg": req.propellant_mass_kg or 15.0,
+        "battery_soc_pct": 100.0,
+        "operational_state": "ACTIVE",
+        "a": a_m,
+        "e": e,
+        "i": i_rad,
+        "Omega": Omega_rad,
+        "omega": omega_rad,
+        "nu": nu_rad,
+        "pos_eci": [float(r_eci[0]), float(r_eci[1]), float(r_eci[2])],
+        "vel_eci": [float(v_eci[0]), float(v_eci[1]), float(v_eci[2])],
+        "in_eclipse": False,
+        "subsystem_status": "NOMINAL",
+        "anomaly_score": 0.0,
+        "bus_voltage_v": 28.2,
+        "bus_current_a": 3.6,
+        "battery_temp_c": 20.0,
+        "avionics_temp_c": 28.0,
+        "solar_power_w": 240.0,
+        "downlink_rate_mbps": 15.0,
+        "comm_link_active": True,
+        "active_faults": {}
+    }
+
+    simulation_engine.satellites[sat_id] = sat_data
+    simulation_engine.record_event(
+        "TLE_IMPORTED",
+        f"Satellite {sat_data['name']} successfully ingested from standard TLE (NORAD #{parsed['sat_number']})",
+        "INFO",
+        sat_id
+    )
+
+    try:
+        async with AsyncSessionLocal() as session:
+            async with session.begin():
+                db_sat = SatelliteModel(
+                    id=sat_id,
+                    name=sat_data["name"],
+                    operational_state=sat_data["operational_state"],
+                    dry_mass_kg=sat_data["dry_mass_kg"],
+                    propellant_mass_kg=sat_data["propellant_mass_kg"],
+                    battery_soc_pct=sat_data["battery_soc_pct"],
+                    is_synthetic=True
+                )
+                session.add(db_sat)
+    except Exception:
+        pass
+
+    return SatelliteResponse(
+        id=sat_data["id"],
+        name=sat_data["name"],
+        operational_state=sat_data["operational_state"],
+        dry_mass_kg=sat_data["dry_mass_kg"],
+        propellant_mass_kg=sat_data["propellant_mass_kg"],
+        battery_soc_pct=round(sat_data["battery_soc_pct"], 2),
+        position_eci_m=sat_data["pos_eci"],
+        velocity_eci_mps=sat_data["vel_eci"],
+        semi_major_axis_m=sat_data["a"],
+        eccentricity=sat_data["e"],
+        inclination_rad=sat_data["i"],
+        in_eclipse=sat_data["in_eclipse"],
+        is_synthetic=True
+    )
 
 @router.get("", response_model=List[SatelliteResponse])
 async def list_satellites():

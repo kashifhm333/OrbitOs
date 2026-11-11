@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Activity, Compass, Thermometer, Zap, Radio, Rocket, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Activity, Compass, Thermometer, Zap, Radio, Rocket, ShieldCheck, ExternalLink } from 'lucide-react';
 import { useOrbitStore } from '../../store/useOrbitStore';
 import { TelemetryDetailPanel } from '../panels/TelemetryDetailPanel';
 import { AttitudePanel } from '../telemetry/AttitudePanel';
@@ -27,9 +27,27 @@ const telemetryTabs: { id: TelemetryTab; label: string; icon: React.ReactNode }[
 
 export const RightPanel: React.FC<RightPanelProps> = () => {
   const [telTab, setTelTab] = useState<TelemetryTab>('telemetry');
-  const { activeAlerts, formalInvariants } = useOrbitStore();
+  const { activeAlerts, formalInvariants, satellites, selectedSatelliteId, timeScale } = useOrbitStore();
   const criticalCount = activeAlerts.filter(a => a.risk_level === 'CRITICAL').length;
   const isViolated = formalInvariants?.is_violated ?? false;
+
+  // Sync to multi-monitor popout window via BroadcastChannel
+  useEffect(() => {
+    const channel = new BroadcastChannel('orbitos_telemetry_sync');
+    const selectedSat = (selectedSatelliteId && satellites[selectedSatelliteId]) || Object.values(satellites)[0];
+    channel.postMessage({
+      type: 'TELEMETRY_UPDATE',
+      satellite: selectedSat,
+      formalInvariants,
+      timeScale,
+      timestamp: Date.now()
+    });
+    return () => channel.close();
+  }, [satellites, selectedSatelliteId, formalInvariants, timeScale]);
+
+  const handlePopOut = () => {
+    window.open('/telemetry-popout', 'orbitos_telemetry_popout', 'width=540,height=850,resizable=yes,scrollbars=yes');
+  };
 
   return (
     <aside className="w-[380px] h-full bg-[#071426] border-l border-[#1A3450] flex flex-col shrink-0 select-none">
@@ -39,9 +57,18 @@ export const RightPanel: React.FC<RightPanelProps> = () => {
           <span className="text-[#00D5FF]"><Activity className="w-4 h-4" /></span>
           Satellite Subsystem Telemetry
         </h2>
-        {criticalCount > 0 && (
-          <StatusBadge variant="critical" label={`${criticalCount} CRITICAL`} dot />
-        )}
+        <div className="flex items-center gap-2">
+          {criticalCount > 0 && (
+            <StatusBadge variant="critical" label={`${criticalCount} CRITICAL`} dot />
+          )}
+          <button
+            onClick={handlePopOut}
+            className="p-1.5 rounded-lg text-[#8295AC] hover:text-[#00D5FF] hover:bg-[#10243B] transition-all cursor-pointer"
+            title="Pop-Out Panel to Detached Multi-Monitor Window (BroadcastChannel Sync)"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* Telemetry sub-tabs */}

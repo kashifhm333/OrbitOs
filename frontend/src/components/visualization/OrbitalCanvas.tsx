@@ -1,5 +1,5 @@
-import React, { Suspense, useRef } from 'react';
-import { Canvas } from '@react-three/fiber';
+import React, { Suspense, useRef, useState } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Stars, PerspectiveCamera, Html } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { EarthGlobe } from './EarthGlobe';
@@ -7,8 +7,57 @@ import { SatelliteMesh } from './SatelliteMesh';
 import { OrbitTrack } from './OrbitTrack';
 import { GroundStationsLayer } from './GroundStationsLayer';
 import { DebrisLayer } from './DebrisLayer';
+import { BreakupDebrisCloud } from './BreakupDebrisCloud';
+import { ManeuverTrajectoryPreview } from './ManeuverTrajectoryPreview';
 import { useOrbitStore } from '../../store/useOrbitStore';
-import { RotateCcw, Eye, Radio, ShieldAlert } from 'lucide-react';
+import { RotateCcw, Eye, Radio, ShieldAlert, Lock, Unlock } from 'lucide-react';
+
+const CameraFocusController: React.FC<{
+  controlsRef: React.RefObject<OrbitControlsImpl>;
+  isLocked: boolean;
+}> = ({ controlsRef, isLocked }) => {
+  const { scenarioState, satellites, debrisList } = useOrbitStore();
+
+  useFrame(() => {
+    if (!isLocked || !controlsRef.current) return;
+
+    const isCloseApproach =
+      scenarioState?.closest_distance_m !== undefined &&
+      scenarioState.closest_distance_m < 100000.0;
+
+    if (!isCloseApproach && !scenarioState?.collision_detected) return;
+
+    let targetX = 0;
+    let targetY = 0;
+    let targetZ = 0;
+
+    if (scenarioState?.collision_point) {
+      targetX = scenarioState.collision_point[0] / 1000000.0;
+      targetY = scenarioState.collision_point[1] / 1000000.0;
+      targetZ = scenarioState.collision_point[2] / 1000000.0;
+    } else if (scenarioState?.scenario_id === 'sat_collision' && satellites['sat-alpha'] && satellites['sat-crosser']) {
+      const p1 = satellites['sat-alpha'].position_eci_m;
+      const p2 = satellites['sat-crosser'].position_eci_m;
+      targetX = (p1[0] + p2[0]) / 2000000.0;
+      targetY = (p1[1] + p2[1]) / 2000000.0;
+      targetZ = (p1[2] + p2[2]) / 2000000.0;
+    } else if (scenarioState?.scenario_id === 'debris_strike' && satellites['sat-strike'] && debrisList[0]?.pos_eci) {
+      const p1 = satellites['sat-strike'].position_eci_m;
+      const p2 = debrisList[0].pos_eci;
+      targetX = (p1[0] + p2[0]) / 2000000.0;
+      targetY = (p1[1] + p2[1]) / 2000000.0;
+      targetZ = (p1[2] + p2[2]) / 2000000.0;
+    }
+
+    if (targetX !== 0 || targetY !== 0 || targetZ !== 0) {
+      controlsRef.current.target.x += (targetX - controlsRef.current.target.x) * 0.05;
+      controlsRef.current.target.y += (targetY - controlsRef.current.target.y) * 0.05;
+      controlsRef.current.target.z += (targetZ - controlsRef.current.target.z) * 0.05;
+    }
+  });
+
+  return null;
+};
 
 export const OrbitalCanvas: React.FC = () => {
   const { 
@@ -24,6 +73,7 @@ export const OrbitalCanvas: React.FC = () => {
   } = useOrbitStore();
 
   const controlsRef = useRef<OrbitControlsImpl>(null);
+  const [cameraLocked, setCameraLocked] = useState(true);
   const satelliteList = Object.values(satellites);
 
   const resetCamera = () => {
@@ -49,6 +99,7 @@ export const OrbitalCanvas: React.FC = () => {
           dampingFactor={0.05}
           target={[0, 1.0, 0]}
         />
+        <CameraFocusController controlsRef={controlsRef} isLocked={cameraLocked} />
 
         {/* Ambient & Sun Directional Lighting */}
         <ambientLight intensity={0.45} />
@@ -88,6 +139,12 @@ export const OrbitalCanvas: React.FC = () => {
           {satelliteList.map((sat) => (
             <SatelliteMesh key={sat.satellite_id} satellite={sat} />
           ))}
+
+          {/* Predicted Evasive Maneuver Trajectory Spline (Dashed Cyan) */}
+          <ManeuverTrajectoryPreview />
+
+          {/* NASA Standard Kinetic Breakup Debris Fragments Cloud */}
+          <BreakupDebrisCloud fragments={scenarioState?.breakup_fragments} />
 
           {/* Visual Collision Strike Marker & Blast Halo */}
           {scenarioState?.collision_detected && scenarioState.collision_point && (
@@ -155,6 +212,20 @@ export const OrbitalCanvas: React.FC = () => {
         </button>
 
         <div className="w-px h-5 bg-[#1A3450] mx-0.5" />
+
+        {/* Camera Auto-Focus Lock / Unlock Toggle */}
+        <button
+          onClick={() => setCameraLocked(!cameraLocked)}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-all ${
+            cameraLocked 
+              ? 'bg-[#00D5FF]/15 text-[#00D5FF] border border-[#00D5FF]/30' 
+              : 'text-[#8295AC] hover:text-[#E8F0FA] hover:bg-[#10243B]'
+          }`}
+          title={cameraLocked ? "Camera Auto-Focus is LOCKED on close approach node (Click to Unlock)" : "Camera Auto-Focus is UNLOCKED (Click to Lock)"}
+        >
+          {cameraLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+          <span>{cameraLocked ? 'LOCK' : 'FREE'}</span>
+        </button>
 
         <button
           onClick={resetCamera}
