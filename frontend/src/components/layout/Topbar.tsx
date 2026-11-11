@@ -9,7 +9,16 @@ interface TopbarProps {
 }
 
 export const Topbar: React.FC<TopbarProps> = ({ onNavigate }) => {
-  const { simulationEpoch, clockState, timeAcceleration, tickNumber, isWsConnected, activeAlerts, scenarioState, setScenarioState } = useOrbitStore();
+  const { 
+    simulationEpoch, 
+    clockState, 
+    timeAcceleration, 
+    tickNumber, 
+    isWsConnected, 
+    activeAlerts, 
+    scenarioState, 
+    loadScenario 
+  } = useOrbitStore();
   const [apiConnected, setApiConnected] = useState(true);
 
   // Check backend health periodically
@@ -39,13 +48,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onNavigate }) => {
 
   const handleScenarioChange = async (sid: string) => {
     try {
-      const resp = await fetch(`/api/v1/simulations/scenarios/${sid}`, { method: 'POST' });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data.scenario_state) {
-          setScenarioState(data.scenario_state);
-        }
-      }
+      await loadScenario(sid);
     } catch (err) {
       console.error('Scenario switch failed:', err);
     }

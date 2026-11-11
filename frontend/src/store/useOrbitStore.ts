@@ -1,5 +1,12 @@
 import { create } from 'zustand';
-import { SatelliteTelemetry, ConjunctionAlert, TickSnapshotMessage, SimulationEvent, ScenarioState } from '../types';
+import { 
+  SatelliteTelemetry, 
+  ConjunctionAlert, 
+  TickSnapshotMessage, 
+  SimulationEvent, 
+  ScenarioState,
+  FormalInvariantsState
+} from '../types';
 
 interface OrbitStore {
   simulationEpoch: string;
@@ -12,6 +19,7 @@ interface OrbitStore {
   recentEvents: SimulationEvent[];
   debrisList: any[];
   scenarioState: ScenarioState | null;
+  formalInvariants: FormalInvariantsState;
   isWsConnected: boolean;
   showDebris: boolean;
   showGroundStations: boolean;
@@ -20,6 +28,8 @@ interface OrbitStore {
   setSnapshot: (snapshot: TickSnapshotMessage) => void;
   setSelectedSatellite: (id: string | null) => void;
   setScenarioState: (state: ScenarioState | null) => void;
+  setFormalInvariants: (invariants: FormalInvariantsState) => void;
+  loadScenario: (scenarioId: string) => Promise<void>;
   setWsConnected: (connected: boolean) => void;
   setShowDebris: (show: boolean) => void;
   setShowGroundStations: (show: boolean) => void;
@@ -77,7 +87,18 @@ const INITIAL_DEBRIS = [
   },
 ];
 
-export const useOrbitStore = create<OrbitStore>((set) => ({
+const INITIAL_INVARIANTS: FormalInvariantsState = {
+  summary: 'ALL PASS (10/10)',
+  passed_count: 10,
+  total_count: 10,
+  is_violated: false,
+  spec_inv_003: 'VERIFIED',
+  spec_inv_004: 'VERIFIED',
+  spec_inv_009: 'VERIFIED',
+  spec_inv_010: 'ACTIVE',
+};
+
+export const useOrbitStore = create<OrbitStore>((set, get) => ({
   simulationEpoch: '2026-11-04T12:00:00Z',
   clockState: 'READY',
   timeAcceleration: 1.0,
@@ -97,6 +118,7 @@ export const useOrbitStore = create<OrbitStore>((set) => ({
     impact_target: null,
     collision_point: null
   },
+  formalInvariants: INITIAL_INVARIANTS,
   isWsConnected: false,
   showDebris: true,
   showGroundStations: true,
@@ -107,24 +129,74 @@ export const useOrbitStore = create<OrbitStore>((set) => ({
     for (const s of snapshot.satellites) {
       satMap[s.satellite_id] = s;
     }
+    const currentSelected = get().selectedSatelliteId;
+    let nextSelected = currentSelected;
+
+    // Auto-bind selected satellite if current is null or not present in current fleet
+    if (!currentSelected || !satMap[currentSelected]) {
+      if (snapshot.scenario_state?.scenario_id === 'nominal' && satMap['sat-clean']) {
+        nextSelected = 'sat-clean';
+      } else if (snapshot.scenario_state?.scenario_id === 'debris_strike' && satMap['sat-strike']) {
+        nextSelected = 'sat-strike';
+      } else if (snapshot.scenario_state?.scenario_id === 'sat_collision' && (satMap['sat-crosser'] || satMap['sat-alpha'])) {
+        nextSelected = satMap['sat-crosser'] ? 'sat-crosser' : 'sat-alpha';
+      } else if (snapshot.satellites.length > 0) {
+        nextSelected = snapshot.satellites[0].satellite_id;
+      }
+    }
+
     set((state) => ({
       simulationEpoch: snapshot.simulation_epoch,
       clockState: snapshot.clock_state,
       timeAcceleration: snapshot.time_acceleration,
       tickNumber: snapshot.tick_number,
       satellites: satMap,
+      selectedSatelliteId: nextSelected,
       activeAlerts: snapshot.active_alerts || [],
       recentEvents: snapshot.recent_events || [],
       debrisList: snapshot.debris || [],
       scenarioState: snapshot.scenario_state ?? state.scenarioState,
+      formalInvariants: snapshot.formal_invariants ?? state.formalInvariants,
     }));
   },
 
   setSelectedSatellite: (id) => set({ selectedSatelliteId: id }),
   setScenarioState: (scState) => set({ scenarioState: scState }),
+  setFormalInvariants: (invariants) => set({ formalInvariants: invariants }),
+
+  loadScenario: async (scenarioId: string) => {
+    let primaryTargetId = 'sat-clean';
+
+    if (scenarioId === 'debris_strike' || scenarioId === '2') {
+      primaryTargetId = 'sat-strike';
+    } else if (scenarioId === 'sat_collision' || scenarioId === '3') {
+      primaryTargetId = 'sat-crosser';
+    }
+
+    // Immediately bind selected satellite to primary target
+    set({ selectedSatelliteId: primaryTargetId });
+
+    try {
+      const resp = await fetch(`/api/v1/simulations/scenarios/${scenarioId}`, { method: 'POST' });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.scenario_state) {
+          set({ scenarioState: data.scenario_state });
+        }
+      }
+      // Parallel fetches to hydrate orbital vectors, passes, and telemetry on Tick #000000
+      await Promise.allSettled([
+        fetch(`/api/v1/orbits/${primaryTargetId}`),
+        fetch(`/api/v1/passes/${primaryTargetId}?horizon_hours=24`),
+        fetch(`/api/v1/telemetry/${primaryTargetId}/latest`),
+      ]);
+    } catch (err) {
+      console.warn('Scenario backend load error (standalone fallback will handle):', err);
+    }
+  },
+
   setWsConnected: (connected) => set({ isWsConnected: connected }),
   setShowDebris: (show) => set({ showDebris: show }),
   setShowGroundStations: (show) => set({ showGroundStations: show }),
   setShowTracks: (show) => set({ showTracks: show }),
 }));
-

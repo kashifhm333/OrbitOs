@@ -27,8 +27,9 @@ const telemetryTabs: { id: TelemetryTab; label: string; icon: React.ReactNode }[
 
 export const RightPanel: React.FC<RightPanelProps> = () => {
   const [telTab, setTelTab] = useState<TelemetryTab>('telemetry');
-  const { activeAlerts } = useOrbitStore();
+  const { activeAlerts, formalInvariants } = useOrbitStore();
   const criticalCount = activeAlerts.filter(a => a.risk_level === 'CRITICAL').length;
+  const isViolated = formalInvariants?.is_violated ?? false;
 
   return (
     <aside className="w-[380px] h-full bg-[#071426] border-l border-[#1A3450] flex flex-col shrink-0 select-none">
@@ -62,41 +63,55 @@ export const RightPanel: React.FC<RightPanelProps> = () => {
       </div>
 
       {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {telTab === 'telemetry' && <TelemetryDetailPanel />}
-        {telTab === 'attitude' && <AttitudePanel />}
-        {telTab === 'thermal' && <ThermalPanel />}
-        {telTab === 'power' && <PowerPanel />}
-        {telTab === 'comm' && <CommPanel />}
-        {telTab === 'mission' && <MissionStatusTimeline />}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col justify-between">
+        <div>
+          {telTab === 'telemetry' && <TelemetryDetailPanel />}
+          {telTab === 'attitude' && <AttitudePanel />}
+          {telTab === 'thermal' && <ThermalPanel />}
+          {telTab === 'power' && <PowerPanel />}
+          {telTab === 'comm' && <CommPanel />}
+          {telTab === 'mission' && <MissionStatusTimeline />}
+        </div>
 
-        {/* Formal Invariants — always pinned at bottom */}
-        <div className="p-3.5 rounded-xl bg-[#0B1B2E] border border-[#1A3450] text-xs font-mono space-y-2 mt-auto">
+        {/* Formal Invariants (VDM-SL) — dynamically bound to simulation state */}
+        <div className={`p-3.5 rounded-xl border text-xs font-mono space-y-2 mt-4 transition-all ${
+          isViolated 
+            ? 'bg-[#FF4D5E]/10 border-[#FF4D5E]/40 shadow-lg shadow-rose-950/30' 
+            : 'bg-[#0B1B2E] border-[#1A3450]'
+        }`}>
           <div className="flex items-center justify-between text-[#E8F0FA] font-semibold border-b border-[#1A3450] pb-1.5">
             <span className="flex items-center space-x-1.5">
-              <ShieldCheck className="w-4 h-4 text-[#00D69A]" />
+              <ShieldCheck className={`w-4 h-4 ${isViolated ? 'text-[#FF4D5E] animate-pulse' : 'text-[#00D69A]'}`} />
               <span>FORMAL INVARIANTS (VDM-SL)</span>
             </span>
-            <span className="text-[10px] text-[#00D69A] px-1.5 py-0.5 rounded bg-[#00D69A]/10 border border-[#00D69A]/20">
-              ALL PASS (10/10)
+            <span className={`text-[10px] px-1.5 py-0.5 rounded border transition-all ${
+              isViolated
+                ? 'text-[#FF4D5E] bg-[#FF4D5E]/20 border-[#FF4D5E]/40 font-bold animate-pulse'
+                : 'text-[#00D69A] bg-[#00D69A]/10 border-[#00D69A]/20'
+            }`}>
+              {formalInvariants?.summary || 'ALL PASS (10/10)'}
             </span>
           </div>
           <div className="text-[11px] text-[#8295AC] space-y-1">
             <div className="flex justify-between">
               <span>SPEC-INV-003 (Battery [0-100]%):</span>
-              <span className="text-[#00D69A]">VERIFIED</span>
+              <span className={`font-semibold ${formalInvariants?.spec_inv_003 === 'VIOLATED' ? 'text-[#FF4D5E]' : 'text-[#00D69A]'}`}>
+                {formalInvariants?.spec_inv_003 || 'VERIFIED'}
+              </span>
             </div>
             <div className="flex justify-between">
               <span>SPEC-INV-004 (Fuel Mass &ge; 0):</span>
-              <span className="text-[#00D69A]">VERIFIED</span>
+              <span className={`font-semibold ${formalInvariants?.spec_inv_004 === 'VIOLATED' ? 'text-[#FF4D5E]' : 'text-[#00D69A]'}`}>
+                {formalInvariants?.spec_inv_004 || 'VERIFIED'}
+              </span>
             </div>
             <div className="flex justify-between">
               <span>SPEC-INV-009 (Ground Elevation &ge; 10°):</span>
-              <span className="text-[#00D69A]">VERIFIED</span>
+              <span className="text-[#00D69A]">{formalInvariants?.spec_inv_009 || 'VERIFIED'}</span>
             </div>
             <div className="flex justify-between">
               <span>SPEC-INV-010 (Simulation Isolation):</span>
-              <span className="text-[#00D69A]">ACTIVE</span>
+              <span className="text-[#00D69A]">{formalInvariants?.spec_inv_010 || 'ACTIVE'}</span>
             </div>
           </div>
         </div>

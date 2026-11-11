@@ -21,6 +21,13 @@ def test_scenario_01_nominal_launch():
     assert sc_state["status"] == "NOMINAL"
     assert sc_state["closest_distance_m"] > 100000.0  # > 100 km separation
     assert "Nominal orbit verified" in sc_state["message"]
+    # Formal invariants verification
+    inv = snap.formal_invariants
+    assert inv is not None
+    assert inv["summary"] == "ALL PASS (10/10)"
+    assert inv["spec_inv_003"] == "VERIFIED"
+    assert inv["spec_inv_004"] == "VERIFIED"
+    assert not inv["is_violated"]
 
 def test_scenario_02_debris_collision_strike():
     """Scenario 2: Launch into hazardous 500.8km orbit, directly strikes Cosmos 2251 fragment."""
@@ -41,6 +48,19 @@ def test_scenario_02_debris_collision_strike():
     assert "COLLISION DETECTED" in sc_state["message"]
     assert "500.8 km" in sc_state["message"]
     assert "Cosmos 2251" in sc_state["message"]
+    # Formal invariants violation check
+    inv = snap.formal_invariants
+    assert inv is not None
+    assert inv["summary"] == "FAILED (8/10)"
+    assert inv["spec_inv_003"] == "VIOLATED"
+    assert inv["spec_inv_004"] == "VIOLATED"
+    assert inv["is_violated"] is True
+    # Subsystem terminal loss-of-signal
+    sat_strike = [s for s in snap.satellites if s.satellite_id == "sat-strike"][0]
+    assert sat_strike.operational_state == "IMPACTED"
+    assert sat_strike.bus_voltage_v == 0.0
+    assert sat_strike.battery_soc_pct == 0.0
+    assert sat_strike.comm_link_active is False
 
 def test_scenario_03_satellite_collision_test_fail():
     """Scenario 3: Two satellites on intersecting crossing tracks collide head-on, test failed."""
@@ -60,3 +80,10 @@ def test_scenario_03_satellite_collision_test_fail():
     assert sc_state["status"] == "TEST_FAILED"
     assert sc_state["closest_distance_m"] <= 50.0
     assert "TEST FAILED: SATELLITE-TO-SATELLITE COLLISION!" in sc_state["message"]
+    # Formal invariants violation check
+    inv = snap.formal_invariants
+    assert inv is not None
+    assert inv["summary"] == "FAILED (8/10)"
+    assert inv["spec_inv_003"] == "VIOLATED"
+    assert inv["spec_inv_004"] == "VIOLATED"
+    assert inv["is_violated"] is True

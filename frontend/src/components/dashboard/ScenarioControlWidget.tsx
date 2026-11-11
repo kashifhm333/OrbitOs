@@ -3,7 +3,13 @@ import { Play, Pause, RotateCcw, ShieldCheck, AlertTriangle, XOctagon, Sparkles,
 import { useOrbitStore } from '../../store/useOrbitStore';
 
 export const ScenarioControlWidget: React.FC = () => {
-  const { clockState, timeAcceleration, scenarioState, setScenarioState } = useOrbitStore();
+  const { 
+    clockState, 
+    timeAcceleration, 
+    scenarioState, 
+    loadScenario, 
+    setSelectedSatellite 
+  } = useOrbitStore();
   const [loading, setLoading] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
 
@@ -14,14 +20,7 @@ export const ScenarioControlWidget: React.FC = () => {
   const handleSelectScenario = async (id: string) => {
     setLoading(true);
     try {
-      const resp = await fetch(`/api/v1/simulations/scenarios/${id}`, { method: 'POST' });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data.scenario_state) {
-          setScenarioState(data.scenario_state);
-          return;
-        }
-      }
+      await loadScenario(id);
     } catch {
       // Backend offline: Client-side fallback for Vercel/demo mode
     } finally {
@@ -30,7 +29,9 @@ export const ScenarioControlWidget: React.FC = () => {
 
     // Client-side fallback setup for Vercel standalone preview
     if (id === 'nominal') {
+      setSelectedSatellite('sat-clean');
       useOrbitStore.setState({
+        selectedSatelliteId: 'sat-clean',
         scenarioState: {
           scenario_id: 'nominal',
           scenario_name: 'Scenario 1: Nominal Clean Launch',
@@ -42,49 +43,77 @@ export const ScenarioControlWidget: React.FC = () => {
           collision_point: null,
         },
         satellites: {
-          'sat-cleanfly': {
-            satellite_id: 'sat-cleanfly',
+          'sat-clean': {
+            satellite_id: 'sat-clean',
             name: 'OrbitOS-CleanFly',
             operational_state: 'ACTIVE',
             position_eci_m: [7028137.0, 0.0, 0.0],
             velocity_eci_mps: [0.0, 5326.0, 5326.0],
-            battery_soc_pct: 98.5,
+            battery_soc_pct: 100.0,
             propellant_mass_kg: 25.0,
             in_eclipse: false,
             subsystem_status: 'NOMINAL',
             anomaly_score: 0.0,
+            bus_voltage_v: 28.4,
+            bus_current_a: 3.8,
+            battery_temp_c: 19.5,
+            avionics_temp_c: 28.0,
+            solar_power_w: 240.0,
+            downlink_rate_mbps: 15.0,
+            comm_link_active: true,
           },
         },
+        formalInvariants: {
+          summary: 'ALL PASS (10/10)',
+          passed_count: 10,
+          total_count: 10,
+          is_violated: false,
+          spec_inv_003: 'VERIFIED',
+          spec_inv_004: 'VERIFIED',
+          spec_inv_009: 'VERIFIED',
+          spec_inv_010: 'ACTIVE',
+        }
       });
     } else if (id === 'debris_strike') {
+      setSelectedSatellite('sat-strike');
       useOrbitStore.setState({
+        selectedSatelliteId: 'sat-strike',
         scenarioState: {
           scenario_id: 'debris_strike',
-          scenario_name: 'Scenario 2: Debris Collision Strike Hazard',
-          status: 'NOMINAL',
+          scenario_name: 'Scenario 2: Orbital Debris Strike',
+          status: 'CONVERGING',
           collision_detected: false,
-          message: 'Spacecraft launched into 500.8 km polar orbit intersecting Cosmos 2251 debris path. Press Run Scenario to observe convergence.',
+          message: 'Satellite deployed at Altitude: 500.8 km, Inclination: 80.2°, RAAN: 2.86°. Converging on Cosmos 2251 debris path...',
           closest_distance_m: 9147.2,
           impact_target: 'Cosmos 2251 Fragment #4812',
           collision_point: null,
         },
         satellites: {
-          'sat-target': {
-            satellite_id: 'sat-target',
+          'sat-strike': {
+            satellite_id: 'sat-strike',
             name: 'OrbitOS-StrikeTarget',
             operational_state: 'ACTIVE',
             position_eci_m: [6878937.0, 0.0, 0.0],
             velocity_eci_mps: [0.0, 7612.0, 0.0],
-            battery_soc_pct: 95.0,
+            battery_soc_pct: 100.0,
             propellant_mass_kg: 25.0,
             in_eclipse: false,
             subsystem_status: 'NOMINAL',
             anomaly_score: 0.05,
+            bus_voltage_v: 28.4,
+            bus_current_a: 3.8,
+            battery_temp_c: 20.0,
+            avionics_temp_c: 29.0,
+            solar_power_w: 240.0,
+            downlink_rate_mbps: 15.0,
+            comm_link_active: true,
           },
         },
       });
     } else if (id === 'sat_collision') {
+      setSelectedSatellite('sat-crosser');
       useOrbitStore.setState({
+        selectedSatelliteId: 'sat-crosser',
         scenarioState: {
           scenario_id: 'sat_collision',
           scenario_name: 'Scenario 3: Satellite Collision (Fail)',
@@ -102,11 +131,18 @@ export const ScenarioControlWidget: React.FC = () => {
             operational_state: 'ACTIVE',
             position_eci_m: [4863581.0, 4863581.0, 0.0],
             velocity_eci_mps: [-3800.0, 3800.0, 5374.0],
-            battery_soc_pct: 96.0,
-            propellant_mass_kg: 25.0,
+            battery_soc_pct: 98.0,
+            propellant_mass_kg: 20.0,
             in_eclipse: false,
             subsystem_status: 'NOMINAL',
             anomaly_score: 0.0,
+            bus_voltage_v: 28.2,
+            bus_current_a: 3.5,
+            battery_temp_c: 19.5,
+            avionics_temp_c: 28.0,
+            solar_power_w: 240.0,
+            downlink_rate_mbps: 15.0,
+            comm_link_active: true,
           },
           'sat-crosser': {
             satellite_id: 'sat-crosser',
@@ -115,10 +151,17 @@ export const ScenarioControlWidget: React.FC = () => {
             position_eci_m: [4863581.0, 4863581.0, 0.0],
             velocity_eci_mps: [3800.0, -3800.0, -5374.0],
             battery_soc_pct: 95.0,
-            propellant_mass_kg: 25.0,
+            propellant_mass_kg: 20.0,
             in_eclipse: false,
             subsystem_status: 'NOMINAL',
             anomaly_score: 0.0,
+            bus_voltage_v: 28.2,
+            bus_current_a: 3.5,
+            battery_temp_c: 19.5,
+            avionics_temp_c: 28.0,
+            solar_power_w: 240.0,
+            downlink_rate_mbps: 15.0,
+            comm_link_active: true,
           },
         },
       });

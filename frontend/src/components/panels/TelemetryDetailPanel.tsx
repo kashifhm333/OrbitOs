@@ -41,7 +41,13 @@ export const TelemetryDetailPanel: React.FC = () => {
         {/* Bus Voltage */}
         <div className="p-2.5 rounded-lg bg-space-800/60 border border-space-700 flex items-center justify-between">
           <span className="text-slate-400">BUS VOLTAGE:</span>
-          <span className="text-slate-100 font-semibold">28.2 V</span>
+          <span className={`font-semibold ${
+            selectedSat.operational_state === 'DESTROYED' || selectedSat.operational_state === 'IMPACTED' || (selectedSat.bus_voltage_v !== undefined && selectedSat.bus_voltage_v <= 0)
+              ? 'text-[#FF4D5E] font-bold animate-pulse'
+              : 'text-slate-100'
+          }`}>
+            {selectedSat.bus_voltage_v !== undefined ? `${selectedSat.bus_voltage_v.toFixed(1)} V` : '28.4 V'}
+          </span>
         </div>
 
         {/* Subsystem Health */}

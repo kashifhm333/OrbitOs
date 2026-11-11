@@ -5,7 +5,9 @@ export type OperationalState =
   | 'MANEUVERING'
   | 'DEGRADED'
   | 'SAFE_HOLD'
-  | 'DECOMMISSIONED';
+  | 'DECOMMISSIONED'
+  | 'IMPACTED'
+  | 'DESTROYED';
 
 export interface SatelliteTelemetry {
   satellite_id: string;
@@ -74,6 +76,17 @@ export interface ScenarioState {
   collision_point?: [number, number, number] | null;
 }
 
+export interface FormalInvariantsState {
+  summary: string;
+  passed_count: number;
+  total_count: number;
+  is_violated: boolean;
+  spec_inv_003: 'VERIFIED' | 'VIOLATED' | string;
+  spec_inv_004: 'VERIFIED' | 'VIOLATED' | string;
+  spec_inv_009: 'VERIFIED' | 'VIOLATED' | string;
+  spec_inv_010: 'ACTIVE' | 'VIOLATED' | string;
+}
+
 export interface TickSnapshotMessage {
   type: string;
   simulation_epoch: string;
@@ -85,6 +98,7 @@ export interface TickSnapshotMessage {
   recent_events?: SimulationEvent[];
   debris?: any[];
   scenario_state?: ScenarioState;
+  formal_invariants?: FormalInvariantsState;
 }
 
 export interface GroundStationItem {
